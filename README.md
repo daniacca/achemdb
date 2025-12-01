@@ -564,6 +564,227 @@ go run .
 
 The server will listen on `:8080` by default.
 
+## Client Package
+
+AchemDB provides a fluent client package (`pkg/client`) for building schemas programmatically and sending them to the server. This provides a type-safe, developer-friendly API for defining schemas in Go code.
+
+### Installation
+
+```bash
+go get github.com/daniacca/achemdb/pkg/client
+```
+
+### Basic Usage
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    "github.com/daniacca/achemdb/pkg/client"
+)
+
+func main() {
+    schema := client.NewSchema("security-alerts").
+        Species("Event", "Raw events", nil).
+        Species("Suspicion", "Suspicious stuff", nil).
+        Species("Alert", "Alerts", nil).
+        Reaction(client.NewReaction("login_failure_to_suspicion").
+            Input("Event", client.WhereEq("type", "login_failed")).
+            Rate(1.0).
+            Effect(
+                client.Consume(),
+                client.Create("Suspicion").
+                    Payload("ip", client.Ref("m.ip")).
+                    Payload("kind", "login_failed").
+                    Energy(1.0).
+                    Stability(1.0),
+            ),
+        )
+
+    // Apply schema to server
+    ctx := context.Background()
+    err := client.ApplySchema(ctx, "http://localhost:8080", "production", schema)
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+### Building Schemas
+
+#### Adding Species
+
+```go
+schema := client.NewSchema("my-system").
+    Species("Species1", "Description 1", nil).
+    Species("Species2", "Description 2", map[string]any{"meta": "value"})
+```
+
+#### Building Reactions
+
+```go
+reaction := client.NewReaction("my_reaction").
+    Name("My Reaction").
+    Input("InputSpecies", client.WhereEq("status", "active")).
+    Rate(0.8).
+    Effect(
+        client.Consume(),
+        client.Create("OutputSpecies").
+            Payload("field", "value").
+            Energy(1.0),
+    )
+```
+
+#### Input Conditions
+
+```go
+// Simple input
+reaction.Input("Species")
+
+// Input with where conditions
+reaction.Input("Species", 
+    client.WhereEq("field1", "value1"),
+    client.WhereEq("field2", 42),
+)
+```
+
+#### Effects
+
+**Consume:**
+```go
+client.Consume()
+```
+
+**Create:**
+```go
+client.Create("NewSpecies").
+    Payload("key1", "value1").
+    Payload("key2", client.Ref("m.field")).  // Reference molecule field
+    Energy(2.0).
+    Stability(1.5)
+```
+
+**Update:**
+```go
+client.Update().EnergyAdd(0.5)
+```
+
+**Conditional Effects (If/Then/Else):**
+```go
+client.If(client.NewIfField("energy", "gt", 3.0)).
+    Then(
+        client.Create("HighEnergy"),
+    ).
+    Else(
+        client.Create("LowEnergy"),
+    )
+```
+
+**Count Molecules Condition:**
+```go
+client.If(client.NewIfCount(
+    client.NewCountMolecules("Suspicion").
+        WhereEq("ip", client.Ref("m.ip")).
+        Op("gte", 3),
+)).
+    Then(
+        client.Create("Alert").
+            Payload("level", "high"),
+    )
+```
+
+#### Partners
+
+```go
+reaction.Input("Suspicion").
+    Partner(client.NewPartner("Suspicion").
+        WhereEq("ip", client.Ref("m.ip")).
+        Count(1),
+    )
+```
+
+#### Catalysts
+
+```go
+reaction.Catalyst(client.NewCatalyst("CatalystSpecies").
+    WhereEq("type", "active").
+    RateBoost(0.5).
+    MaxRate(0.9),
+)
+```
+
+### Field References
+
+Use `client.Ref()` to reference molecule fields in payloads and conditions:
+
+```go
+client.Ref("m.ip")      // References payload field "ip" -> "$m.ip"
+client.Ref("ip")        // Also works -> "$m.ip"
+client.Ref("m.energy")  // References energy field -> "$m.energy"
+```
+
+### Complete Example
+
+```go
+schema := client.NewSchema("security-alerts").
+    Species("Event", "Raw events", nil).
+    Species("Suspicion", "Suspicious entities", nil).
+    Species("Alert", "Security alerts", nil).
+    Reaction(client.NewReaction("login_failure_to_suspicion").
+        Input("Event", client.WhereEq("type", "login_failed")).
+        Rate(1.0).
+        Effect(
+            client.Consume(),
+            client.Create("Suspicion").
+                Payload("ip", client.Ref("m.ip")).
+                Payload("kind", "login_failed").
+                Energy(1.0).
+                Stability(1.0),
+        ),
+    ).
+    Reaction(client.NewReaction("suspicion_to_alert").
+        Input("Suspicion").
+        Rate(0.8).
+        Effect(
+            client.If(client.NewIfCount(
+                client.NewCountMolecules("Suspicion").
+                    WhereEq("ip", client.Ref("m.ip")).
+                    Op("gte", 3),
+            )).
+                Then(
+                    client.Create("Alert").
+                        Payload("ip", client.Ref("m.ip")).
+                        Payload("level", "high").
+                        Energy(5.0),
+                ),
+        ),
+    ).
+    Reaction(client.NewReaction("decay").
+        Input("Suspicion").
+        Rate(1.0).
+        Effect(
+            client.Update().EnergyAdd(-0.1),
+        ),
+    )
+
+ctx := context.Background()
+err := client.ApplySchema(ctx, "http://localhost:8080", "production", schema)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+### Benefits of the Client Package
+
+- **Type Safety**: Compile-time checking of schema structure
+- **Fluent API**: Chainable methods for readable code
+- **IDE Support**: Full autocomplete and documentation
+- **Reusability**: Build schemas programmatically
+- **Integration**: Easy to integrate into Go applications
+
 ## Design Philosophy
 
 AchemDB embraces a **reactive, chemistry-inspired** model where:
