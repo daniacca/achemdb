@@ -1,7 +1,9 @@
 package achem
 
 import (
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestNewEnvironment(t *testing.T) {
@@ -428,6 +430,241 @@ func TestEnvView_Find(t *testing.T) {
 	})
 	if len(result) != 0 {
 		t.Errorf("Expected 0 molecules, got %d", len(result))
+	}
+}
+
+func TestEnvironment_Run_StartsTicker(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+
+	// Insert a molecule to track changes
+	env.Insert(NewMolecule("Test", nil, 0))
+	initialTime := env.now()
+
+	// Start running with a short interval
+	env.Run(50 * time.Millisecond)
+
+	// Wait a bit to let it tick a few times
+	time.Sleep(200 * time.Millisecond)
+
+	// Stop it
+	env.Stop()
+
+	// Give it a moment to stop
+	time.Sleep(100 * time.Millisecond)
+
+	// Time should have advanced
+	finalTime := env.now()
+	if finalTime <= initialTime {
+		t.Errorf("Expected time to advance, initial: %d, final: %d", initialTime, finalTime)
+	}
+}
+
+func TestEnvironment_Run_CanBeStopped(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+
+	initialTime := env.now()
+
+	// Start running
+	env.Run(10 * time.Millisecond)
+
+	// Wait a bit
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop it
+	env.Stop()
+
+	// Wait for it to actually stop
+	time.Sleep(100 * time.Millisecond)
+
+	// Record time after stop
+	timeAfterStop := env.now()
+
+	// Wait a bit more - time should not advance after stop
+	time.Sleep(100 * time.Millisecond)
+	timeAfterWait := env.now()
+
+	if timeAfterWait != timeAfterStop {
+		t.Errorf("Expected time to stop advancing after Stop(), was %d, now %d", timeAfterStop, timeAfterWait)
+	}
+
+	// But it should have advanced while running
+	if timeAfterStop <= initialTime {
+		t.Errorf("Expected time to advance while running, initial: %d, after stop: %d", initialTime, timeAfterStop)
+	}
+}
+
+func TestEnvironment_Run_CanBeRestarted(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+
+	initialTime := env.now()
+
+	// Start running
+	env.Run(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop it
+	env.Stop()
+	time.Sleep(50 * time.Millisecond)
+	timeAfterFirstStop := env.now()
+
+	// Restart it
+	env.Run(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop again
+	env.Stop()
+	time.Sleep(50 * time.Millisecond)
+	timeAfterSecondStop := env.now()
+
+	// Time should have advanced in both runs
+	if timeAfterFirstStop <= initialTime {
+		t.Errorf("Expected time to advance in first run, initial: %d, after first stop: %d", initialTime, timeAfterFirstStop)
+	}
+	if timeAfterSecondStop <= timeAfterFirstStop {
+		t.Errorf("Expected time to advance in second run, after first stop: %d, after second stop: %d", timeAfterFirstStop, timeAfterSecondStop)
+	}
+}
+
+func TestEnvironment_Run_DoesNotBlock(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+
+	// Run should return immediately (not block)
+	start := time.Now()
+	env.Run(100 * time.Millisecond)
+	duration := time.Since(start)
+
+	// Should return almost immediately (within 10ms)
+	if duration > 10*time.Millisecond {
+		t.Errorf("Run() should not block, took %v", duration)
+	}
+
+	// Clean up
+	env.Stop()
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestEnvironment_Run_MultipleCallsIgnored(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+
+	initialTime := env.now()
+
+	// Call Run multiple times
+	env.Run(50 * time.Millisecond)
+	env.Run(50 * time.Millisecond)
+	env.Run(50 * time.Millisecond)
+
+	// Wait a bit
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop once should be enough
+	env.Stop()
+	time.Sleep(50 * time.Millisecond)
+
+	// Time should have advanced (only one ticker should be running)
+	finalTime := env.now()
+	if finalTime <= initialTime {
+		t.Errorf("Expected time to advance, initial: %d, final: %d", initialTime, finalTime)
+	}
+}
+
+func TestEnvironment_Stop_WhenNotRunning(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+
+	// Stop when not running should not panic
+	env.Stop()
+	env.Stop() // Multiple stops should be safe
+}
+
+func TestEnvironment_Run_ConcurrentAccess(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+
+	// Insert some molecules
+	for i := range 10 {
+		env.Insert(NewMolecule("Test", map[string]any{"id": i}, 0))
+	}
+
+	var wg sync.WaitGroup
+
+	// Start running
+	env.Run(10 * time.Millisecond)
+
+	// Concurrently access molecules while running
+	for range 5 {
+		wg.Go(func() {
+			for range 10 {
+				_ = env.AllMolecules()
+				time.Sleep(1 * time.Millisecond)
+			}
+		})
+	}
+
+	// Wait a bit
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop
+	env.Stop()
+
+	// Wait for goroutines
+	wg.Wait()
+
+	// Should not have panicked or deadlocked
+	molecules := env.AllMolecules()
+	_ = molecules // Verify we can access molecules without error
+}
+
+func TestEnvironment_Run_StepIsCalled(t *testing.T) {
+	schema := NewSchema("test")
+	
+	// Create a reaction that tracks if it was called
+	reactionCalled := false
+	var mu sync.Mutex
+	
+	r := &mockReaction{
+		id:   "track-reaction",
+		rate: 1.0, // Always fire
+		inputPattern: func(m Molecule) bool {
+			return m.Species == "Input"
+		},
+		apply: func(m Molecule, env EnvView, ctx ReactionContext) ReactionEffect {
+			mu.Lock()
+			reactionCalled = true
+			mu.Unlock()
+			return ReactionEffect{
+				ConsumedIDs: []MoleculeID{m.ID},
+			}
+		},
+	}
+
+	schema = schema.WithReactions(r)
+	env := NewEnvironment(schema)
+
+	// Insert input molecule
+	env.Insert(NewMolecule("Input", nil, 0))
+
+	// Start running
+	env.Run(50 * time.Millisecond)
+
+	// Wait for reaction to be called
+	time.Sleep(200 * time.Millisecond)
+
+	// Stop
+	env.Stop()
+	time.Sleep(50 * time.Millisecond)
+
+	// Check if reaction was called
+	mu.Lock()
+	called := reactionCalled
+	mu.Unlock()
+
+	if !called {
+		t.Error("Expected reaction to be called during Run()")
 	}
 }
 

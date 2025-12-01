@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/daniacca/achemdb/internal/achem"
 )
@@ -82,6 +84,7 @@ func (s *Server) handleInsertMolecule(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /tick
+// Manually trigger a single step (useful for testing/debugging when auto-running is disabled)
 func (s *Server) handleTick(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	env := s.env
@@ -95,6 +98,52 @@ func (s *Server) handleTick(w http.ResponseWriter, r *http.Request) {
 	env.Step()
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ticked"))
+}
+
+// POST /start
+// Start the environment auto-running with the specified interval (in milliseconds)
+// Query param: interval (default: 1000ms)
+func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	env := s.env
+	s.mu.RUnlock()
+
+	if env == nil {
+		http.Error(w, "no schema loaded", http.StatusBadRequest)
+		return
+	}
+
+	// Parse interval from query param (default: 1 second)
+	interval := 1000 * time.Millisecond
+	if intervalStr := r.URL.Query().Get("interval"); intervalStr != "" {
+		if ms, err := strconv.Atoi(intervalStr); err == nil && ms > 0 {
+			interval = time.Duration(ms) * time.Millisecond
+		} else {
+			http.Error(w, "invalid interval: must be a positive integer (milliseconds)", http.StatusBadRequest)
+			return
+		}
+	}
+
+	env.Run(interval)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("environment started"))
+}
+
+// POST /stop
+// Stop the environment auto-running
+func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	env := s.env
+	s.mu.RUnlock()
+
+	if env == nil {
+		http.Error(w, "no schema loaded", http.StatusBadRequest)
+		return
+	}
+
+	env.Stop()
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("environment stopped"))
 }
 
 // GET /molecules
@@ -124,6 +173,8 @@ func main() {
 	http.HandleFunc("/schema", srv.handleSchema)
 	http.HandleFunc("/molecule", srv.handleInsertMolecule)
 	http.HandleFunc("/tick", srv.handleTick)
+	http.HandleFunc("/start", srv.handleStart)
+	http.HandleFunc("/stop", srv.handleStop)
 	http.HandleFunc("/molecules", srv.handleListMolecules)
 
 	log.Println("achemdb-server listening on :8080")

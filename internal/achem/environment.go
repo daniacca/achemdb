@@ -12,6 +12,8 @@ type Environment struct {
 	time    int64
 	mols    map[MoleculeID]Molecule
 	rand    *rand.Rand
+	stopCh chan struct{}
+	isRunning bool
 }
 
 func NewEnvironment(schema *Schema) *Environment {
@@ -20,6 +22,8 @@ func NewEnvironment(schema *Schema) *Environment {
 		mols:   make(map[MoleculeID]Molecule),
 		rand:   rand.New(rand.NewSource(time.Now().UnixNano())),
 		time:   0,
+		stopCh: make(chan struct{}),
+		isRunning: false,
 	}
 }
 
@@ -75,6 +79,8 @@ func (e *Environment) AllMolecules() []Molecule {
 	return out
 }
 
+// a single step inside the environment, it will apply all reactions to all the molecules
+// collected in the snapshot. 
 func (e *Environment) Step() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -156,4 +162,51 @@ func (e *Environment) Step() {
 		}
 		e.mols[nm.ID] = nm
 	}
+}
+
+// Run will start the environment in a goroutine, starting it's own ticker that will
+// run until the stop channel is closed. It can be called multiple times to restart
+// after stopping.
+func (e *Environment) Run(interval time.Duration) {
+	e.mu.Lock()
+	if e.isRunning {
+		e.mu.Unlock()
+		return
+	}
+	// Create a new stop channel for this run (allows restart after stop)
+	e.stopCh = make(chan struct{})
+	e.isRunning = true
+	e.mu.Unlock()
+
+	// Run in a goroutine so it doesn't block the caller
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				e.Step()
+			case <-e.stopCh:
+				e.mu.Lock()
+				e.isRunning = false
+				e.mu.Unlock()
+				return
+			}
+		}
+	}()
+}
+
+// Stop will stop the environment by closing the stop channel.
+// After stopping, Run() can be called again to restart.
+func (e *Environment) Stop() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.isRunning {
+		return
+	}
+	
+	// Close the channel to signal stop
+	// The goroutine will detect this and set isRunning to false
+	close(e.stopCh)
 }
