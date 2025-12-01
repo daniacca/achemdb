@@ -9,15 +9,20 @@ import (
 	"time"
 
 	"github.com/daniacca/achemdb/internal/achem"
+	achemnotifiers "github.com/daniacca/achemdb/internal/achem/notifiers"
 )
 
 type Server struct {
-	manager *achem.EnvironmentManager
+	manager       *achem.EnvironmentManager
+	notifierMgr   *achem.NotificationManager
+	globalNotifierMgr *achem.NotificationManager
 }
 
 func NewServer() *Server {
+	globalMgr := achem.NewNotificationManager()
 	return &Server{
-		manager: achem.NewEnvironmentManager(),
+		manager:       achem.NewEnvironmentManager(),
+		globalNotifierMgr: globalMgr,
 	}
 }
 
@@ -80,6 +85,12 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "cannot update environment: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+	}
+
+	// Set the notification manager for the environment to use the global one
+	env, exists := s.manager.GetEnvironment(envID)
+	if exists {
+		env.SetNotificationManager(s.globalNotifierMgr)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -257,6 +268,8 @@ func main() {
 
 	http.HandleFunc("/healthz", srv.handleHealth)
 	http.HandleFunc("/envs", srv.handleListEnvironments)
+	http.HandleFunc("/notifiers", srv.handleNotifiersRoutes)
+	http.HandleFunc("/notifiers/", srv.handleNotifiersRoutes)
 	http.HandleFunc("/env/", srv.handleEnvironmentRoutes)
 
 	log.Println("achemdb-server listening on :8080")
@@ -288,6 +301,128 @@ func (s *Server) handleEnvironmentRoutes(w http.ResponseWriter, r *http.Request)
 		case remainingPath == "" && r.Method == http.MethodDelete:
 			s.handleDeleteEnvironment(w, r)
 		default:
-			http.Error(w, "not found", http.StatusNotFound)
+		http.Error(w, "not found", http.StatusNotFound)
 	}
+}
+
+// handleNotifiersRoutes handles notifier management endpoints
+func (s *Server) handleNotifiersRoutes(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.URL.Path == "/notifiers" && r.Method == http.MethodGet:
+		s.handleListNotifiers(w, r)
+	case r.URL.Path == "/notifiers" && r.Method == http.MethodPost:
+		s.handleRegisterNotifier(w, r)
+	case strings.HasPrefix(r.URL.Path, "/notifiers/") && r.Method == http.MethodDelete:
+		s.handleUnregisterNotifier(w, r)
+	default:
+		http.Error(w, "not found", http.StatusNotFound)
+	}
+}
+
+// GET /notifiers
+// List all registered notifiers
+func (s *Server) handleListNotifiers(w http.ResponseWriter, r *http.Request) {
+	notifierIDs := s.globalNotifierMgr.ListNotifiers()
+	
+	// Get notifier types
+	notifiers := make([]map[string]string, 0, len(notifierIDs))
+	for _, id := range notifierIDs {
+		notifier, exists := s.globalNotifierMgr.GetNotifier(id)
+		if exists {
+			notifiers = append(notifiers, map[string]string{
+				"id":   id,
+				"type": notifier.Type(),
+			})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"notifiers": notifiers}); err != nil {
+		http.Error(w, "cannot encode: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// POST /notifiers
+// Register a new notifier
+// Body: { "type": "webhook", "id": "my-webhook", "config": { "url": "http://..." } }
+type registerNotifierRequest struct {
+	Type   string         `json:"type"`
+	ID     string         `json:"id"`
+	Config map[string]any `json:"config"`
+}
+
+func (s *Server) handleRegisterNotifier(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var req registerNotifierRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.ID == "" {
+		http.Error(w, "notifier ID is required", http.StatusBadRequest)
+		return
+	}
+
+	var notifier achem.Notifier
+	var err error
+
+	switch req.Type {
+	case "webhook":
+		url, ok := req.Config["url"].(string)
+		if !ok || url == "" {
+			http.Error(w, "webhook URL is required", http.StatusBadRequest)
+			return
+		}
+		wh := achemnotifiers.NewWebhookNotifier(req.ID, url)
+		
+		// Set custom headers if provided
+		if headers, ok := req.Config["headers"].(map[string]any); ok {
+			for k, v := range headers {
+				if vStr, ok := v.(string); ok {
+					wh.SetHeader(k, vStr)
+				}
+			}
+		}
+		
+		notifier = wh
+	default:
+		http.Error(w, "unknown notifier type: "+req.Type, http.StatusBadRequest)
+		return
+	}
+
+	if err = s.globalNotifierMgr.RegisterNotifier(notifier); err != nil {
+		http.Error(w, "cannot register notifier: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("notifier registered"))
+}
+
+// DELETE /notifiers/{id}
+// Unregister a notifier
+func (s *Server) handleUnregisterNotifier(w http.ResponseWriter, r *http.Request) {
+	// Extract notifier ID from path
+	path := r.URL.Path
+	if !strings.HasPrefix(path, "/notifiers/") {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	notifierID := strings.TrimPrefix(path, "/notifiers/")
+	if notifierID == "" {
+		http.Error(w, "notifier ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.globalNotifierMgr.UnregisterNotifier(notifierID); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("notifier unregistered"))
 }

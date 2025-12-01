@@ -101,6 +101,7 @@ type ReactionConfig struct {
 	Rate      float64          `json:"rate"`
 	Catalysts []CatalystConfig `json:"catalysts,omitempty"` // catalysts that increase reaction rate
 	Effects   []EffectConfig   `json:"effects"`
+	Notify    *NotificationConfig `json:"notify,omitempty"` // notification configuration
 }
 
 type SchemaConfig struct {

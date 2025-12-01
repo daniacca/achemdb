@@ -1,30 +1,55 @@
 package achem
 
 import (
+	"context"
 	"math/rand"
 	"sync"
 	"time"
 )
 
 type Environment struct {
-	mu      sync.RWMutex
-	schema  *Schema
-	time    int64
-	mols    map[MoleculeID]Molecule
-	rand    *rand.Rand
-	stopCh chan struct{}
-	isRunning bool
+	mu          sync.RWMutex
+	schema      *Schema
+	time        int64
+	mols        map[MoleculeID]Molecule
+	rand        *rand.Rand
+	stopCh      chan struct{}
+	isRunning   bool
+	envID       EnvironmentID
+	notifierMgr *NotificationManager
 }
 
 func NewEnvironment(schema *Schema) *Environment {
 	return &Environment{
-		schema: schema,
-		mols:   make(map[MoleculeID]Molecule),
-		rand:   rand.New(rand.NewSource(time.Now().UnixNano())),
-		time:   0,
-		stopCh: make(chan struct{}),
-		isRunning: false,
+		schema:      schema,
+		mols:        make(map[MoleculeID]Molecule),
+		rand:        rand.New(rand.NewSource(time.Now().UnixNano())),
+		time:        0,
+		stopCh:      make(chan struct{}),
+		isRunning:   false,
+		notifierMgr: NewNotificationManager(),
 	}
+}
+
+// SetEnvironmentID sets the environment ID (used for notifications)
+func (e *Environment) SetEnvironmentID(id EnvironmentID) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.envID = id
+}
+
+// SetNotificationManager sets a custom notification manager
+func (e *Environment) SetNotificationManager(mgr *NotificationManager) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.notifierMgr = mgr
+}
+
+// GetNotificationManager returns the notification manager
+func (e *Environment) GetNotificationManager() *NotificationManager {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.notifierMgr
 }
 
 // envView is a private adapter that exposes read-only methods
@@ -101,6 +126,7 @@ func (e *Environment) Step() {
 
 	// 1) collect all effects
 	consumed := make(map[MoleculeID]struct{})
+	consumedMolecules := make(map[MoleculeID]Molecule) // Store molecules before deletion for notifications
 	changes := make(map[MoleculeID]Molecule)
 	newMolecules := make([]Molecule, 0)
 
@@ -121,6 +147,21 @@ func (e *Environment) Step() {
 			}
 
 			eff := r.Apply(m, view, ctx)
+
+			// Check if reaction produced any effects (non-empty effect)
+			hasEffects := len(eff.ConsumedIDs) > 0 || len(eff.Changes) > 0 || len(eff.NewMolecules) > 0
+
+			// Store consumed molecules before marking them for deletion (for notifications)
+			for _, id := range eff.ConsumedIDs {
+				if mol, exists := e.mols[id]; exists {
+					consumedMolecules[id] = mol
+				}
+			}
+
+			// Send notification if reaction fired and has effects
+			if hasEffects {
+				e.sendNotification(r, m, view, eff, ctx, consumedMolecules)
+			}
 
 			// mark consumed
 			for _, id := range eff.ConsumedIDs {
@@ -211,4 +252,142 @@ func (e *Environment) Stop() {
 	// Close the channel to signal stop
 	// The goroutine will detect this and set isRunning to false
 	close(e.stopCh)
+}
+
+// sendNotification sends a notification if the reaction is configured to do so
+func (e *Environment) sendNotification(r Reaction, m Molecule, view EnvView, eff ReactionEffect, ctx ReactionContext, consumedMolecules map[MoleculeID]Molecule) {
+	// Get notification config from reaction if it's a ConfigReaction
+	notifyCfg := e.getNotificationConfig(r)
+	if notifyCfg == nil || !notifyCfg.Enabled {
+		return
+	}
+
+	if len(notifyCfg.Notifiers) == 0 {
+		return
+	}
+
+	// Find partners if this was a partner-based reaction
+	partners := e.findPartnersForNotification(r, m, view)
+
+	// Collect consumed molecules for the notification
+	consumed := make([]Molecule, 0, len(eff.ConsumedIDs))
+	for _, id := range eff.ConsumedIDs {
+		if mol, exists := consumedMolecules[id]; exists {
+			consumed = append(consumed, mol)
+		}
+	}
+
+	// Create notification event
+	event := CreateNotificationEventWithConsumed(
+		e.envID,
+		r,
+		m,
+		partners,
+		eff,
+		consumed,
+		ctx.EnvTime,
+	)
+
+	// Send notification asynchronously to avoid blocking the step
+	go func() {
+		notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_ = e.notifierMgr.Notify(notifyCtx, event, notifyCfg.Notifiers)
+	}()
+}
+
+// getNotificationConfig extracts notification config from a reaction
+func (e *Environment) getNotificationConfig(r Reaction) *NotificationConfig {
+	// Check if it's a ConfigReaction
+	if cr, ok := r.(*ConfigReaction); ok {
+		if cr.cfg.Notify != nil {
+			return cr.cfg.Notify
+		}
+	}
+	return nil
+}
+
+// findPartnersForNotification finds partners that were used in the reaction
+func (e *Environment) findPartnersForNotification(r Reaction, m Molecule, view EnvView) []Molecule {
+	if cr, ok := r.(*ConfigReaction); ok {
+		partners := make([]Molecule, 0)
+		for _, partnerCfg := range cr.cfg.Input.Partners {
+			// Use the findPartners function from config_schema_builder
+			foundPartners := findPartnersForReaction(partnerCfg, m, view)
+			partners = append(partners, foundPartners...)
+		}
+		return partners
+	}
+	return nil
+}
+
+// findPartnersForReaction is a wrapper to access the private findPartners function
+// We need to make findPartners accessible or create a public wrapper
+func findPartnersForReaction(partnerCfg PartnerConfig, m Molecule, env EnvView) []Molecule {
+	// Get all molecules of the specified species
+	candidates := env.MoleculesBySpecies(SpeciesName(partnerCfg.Species))
+
+	var matches []Molecule
+	for _, candidate := range candidates {
+		// Skip the molecule itself
+		if candidate.ID == m.ID {
+			continue
+		}
+
+		// Check where conditions
+		matchesWhere := true
+		for field, cond := range partnerCfg.Where {
+			// Resolve the condition value (might be "$m.field")
+			condValue := resolveValueFromMoleculeForNotification(cond.Eq, m)
+			
+			candidateValue, ok := candidate.Payload[field]
+			if !ok || candidateValue != condValue {
+				matchesWhere = false
+				break
+			}
+		}
+
+		if matchesWhere {
+			matches = append(matches, candidate)
+		}
+	}
+
+	// Return up to the required count
+	count := partnerCfg.Count
+	if count <= 0 {
+		count = 1 // default
+	}
+	if len(matches) > count {
+		return matches[:count]
+	}
+	return matches
+}
+
+// resolveValueFromMoleculeForNotification resolves values from molecules (duplicate of resolveValueFromMolecule)
+func resolveValueFromMoleculeForNotification(val any, m Molecule) any {
+	s, ok := val.(string)
+	if !ok {
+		return val
+	}
+	if len(s) > 3 && s[:3] == "$m." {
+		field := s[3:]
+		// Check if it's a molecule field (energy, stability, etc.)
+		switch field {
+		case "energy":
+			return m.Energy
+		case "stability":
+			return m.Stability
+		case "id":
+			return string(m.ID)
+		case "species":
+			return string(m.Species)
+		default:
+			// Otherwise, check payload
+			if v, ok := m.Payload[field]; ok {
+				return v
+			}
+		}
+	}
+	return val
 }

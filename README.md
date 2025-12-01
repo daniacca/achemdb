@@ -1,5 +1,7 @@
 # AchemDB
 
+<div align="center"><img src="./docs/img/achemdb_logo.png" width=250 height=250></div>
+
 AchemDB is a Go library that implements an **artificial chemistry database** - a novel approach to data processing inspired by chemical reactions. Instead of traditional database queries, data entities (molecules) interact through reactions that transform them based on patterns, rates, and environmental conditions.
 
 ## Overview
@@ -645,7 +647,7 @@ reaction := client.NewReaction("my_reaction").
 reaction.Input("Species")
 
 // Input with where conditions
-reaction.Input("Species", 
+reaction.Input("Species",
     client.WhereEq("field1", "value1"),
     client.WhereEq("field2", 42),
 )
@@ -654,11 +656,13 @@ reaction.Input("Species",
 #### Effects
 
 **Consume:**
+
 ```go
 client.Consume()
 ```
 
 **Create:**
+
 ```go
 client.Create("NewSpecies").
     Payload("key1", "value1").
@@ -668,11 +672,13 @@ client.Create("NewSpecies").
 ```
 
 **Update:**
+
 ```go
 client.Update().EnergyAdd(0.5)
 ```
 
 **Conditional Effects (If/Then/Else):**
+
 ```go
 client.If(client.NewIfField("energy", "gt", 3.0)).
     Then(
@@ -684,6 +690,7 @@ client.If(client.NewIfField("energy", "gt", 3.0)).
 ```
 
 **Count Molecules Condition:**
+
 ```go
 client.If(client.NewIfCount(
     client.NewCountMolecules("Suspicion").
@@ -784,6 +791,145 @@ if err != nil {
 - **IDE Support**: Full autocomplete and documentation
 - **Reusability**: Build schemas programmatically
 - **Integration**: Easy to integrate into Go applications
+
+## Notifications System
+
+AchemDB includes a modular notification system that allows you to be notified when reactions fire. This eliminates the need for polling - the database proactively notifies your application when interesting events occur.
+
+### Notification Architecture
+
+The notification system is **modular** - you can implement different notification channels (webhooks, WebSocket, RabbitMQ, Kafka, etc.) and activate them as needed. Each reaction can be configured to send notifications to specific notifiers.
+
+### Supported Notifiers
+
+Currently implemented:
+
+- **Webhook** - HTTP POST to a webhook URL
+- **WebSocket** - Real-time notifications via WebSocket connections
+
+Future notifiers (easy to add):
+
+- RabbitMQ
+- Kafka
+- TCP Socket
+
+### Configuring Notifications in Reactions
+
+#### Using JSON DSL
+
+```json
+{
+  "id": "login_failure_to_suspicion",
+  "name": "Promote login failures to suspicion",
+  "input": {
+    "species": "Event",
+    "where": {
+      "type": { "eq": "login_failed" }
+    }
+  },
+  "rate": 1.0,
+  "effects": [
+    { "consume": true },
+    {
+      "create": {
+        "species": "Suspicion",
+        "payload": {
+          "ip": "$m.ip"
+        }
+      }
+    }
+  ],
+  "notify": {
+    "enabled": true,
+    "notifiers": ["webhook-1", "websocket-1"]
+  }
+}
+```
+
+#### Using Client Package
+
+```go
+schema := client.NewSchema("security-alerts").
+    Reaction(client.NewReaction("login_failure_to_suspicion").
+        Input("Event", client.WhereEq("type", "login_failed")).
+        Rate(1.0).
+        Effect(
+            client.Consume(),
+            client.Create("Suspicion").
+                Payload("ip", client.Ref("m.ip")),
+        ).
+        Notify(client.NewNotification().
+            Enabled(true).
+            Notifiers("webhook-1", "websocket-1"),
+        ),
+    )
+```
+
+### Managing Notifiers via API
+
+#### Register a Webhook Notifier
+
+```bash
+curl -X POST http://localhost:8080/notifiers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "webhook",
+    "id": "webhook-1",
+    "config": {
+      "url": "http://your-app.com/webhook",
+      "headers": {
+        "Authorization": "Bearer token"
+      }
+    }
+  }'
+```
+
+#### List All Notifiers
+
+```bash
+curl http://localhost:8080/notifiers
+```
+
+#### Unregister a Notifier
+
+```bash
+curl -X DELETE http://localhost:8080/notifiers/webhook-1
+```
+
+### Notification Event Format
+
+When a reaction fires, a notification event is sent with the following structure:
+
+```json
+{
+  "environment_id": "production",
+  "reaction_id": "login_failure_to_suspicion",
+  "reaction_name": "Promote login failures to suspicion",
+  "timestamp": 1234567890,
+  "env_time": 42,
+  "input_molecule": {
+    "id": "...",
+    "species": "Event",
+    "payload": { "type": "login_failed", "ip": "1.2.3.4" },
+    "energy": 1.0
+  },
+  "partners": [],
+  "consumed_molecules": [...],
+  "created_molecules": [
+    {
+      "id": "...",
+      "species": "Suspicion",
+      "payload": { "ip": "1.2.3.4" }
+    }
+  ],
+  "updated_molecules": [],
+  "effect": {
+    "consumed_ids": [...],
+    "changes": [...],
+    "new_molecules": [...]
+  }
+}
+```
 
 ## Design Philosophy
 

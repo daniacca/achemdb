@@ -55,3 +55,24 @@ func ExampleApplySchema() {
 	_ = schema
 }
 
+func ExampleReactionBuilder_Notify() {
+	schema := client.NewSchema("security-alerts").
+		Species("Event", "Raw events", nil).
+		Species("Alert", "Alerts", nil).
+		Reaction(client.NewReaction("event_to_alert").
+			Input("Event").
+			Rate(1.0).
+			Effect(
+				client.Consume(),
+				client.Create("Alert").
+					Payload("message", "Event processed"),
+			).
+			Notify(client.NewNotification().
+				Enabled(true).
+				Notifiers("webhook-1", "websocket-1"),
+			),
+		)
+
+	_ = schema
+}
+

@@ -32,6 +32,7 @@ func (em *EnvironmentManager) CreateEnvironment(id EnvironmentID, schema *Schema
 	}
 
 	env := NewEnvironment(schema)
+	env.SetEnvironmentID(id)
 	em.environments[id] = env
 	return nil
 }

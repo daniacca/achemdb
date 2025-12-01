@@ -66,6 +66,7 @@ type ReactionBuilder struct {
 	rate      float64
 	catalysts []*CatalystBuilder
 	effects   []*EffectBuilder
+	notify    *NotificationBuilder
 }
 
 // NewReaction creates a new reaction builder
@@ -125,6 +126,12 @@ func (rb *ReactionBuilder) Effect(ebs ...interface{}) *ReactionBuilder {
 	return rb
 }
 
+// Notify configures notifications for this reaction
+func (rb *ReactionBuilder) Notify(nb *NotificationBuilder) *ReactionBuilder {
+	rb.notify = nb
+	return rb
+}
+
 // Build converts the builder to a ReactionConfig
 func (rb *ReactionBuilder) Build() achem.ReactionConfig {
 	input := achem.InputConfig{}
@@ -142,7 +149,7 @@ func (rb *ReactionBuilder) Build() achem.ReactionConfig {
 		effects = append(effects, eb.Build())
 	}
 
-	return achem.ReactionConfig{
+	reactionCfg := achem.ReactionConfig{
 		ID:        rb.id,
 		Name:      rb.name,
 		Input:     input,
@@ -150,6 +157,12 @@ func (rb *ReactionBuilder) Build() achem.ReactionConfig {
 		Catalysts: catalysts,
 		Effects:   effects,
 	}
+
+	if rb.notify != nil {
+		reactionCfg.Notify = rb.notify.Build()
+	}
+
+	return reactionCfg
 }
 
 // InputBuilder provides a fluent API for building input configurations
@@ -597,4 +610,44 @@ func ApplySchema(ctx context.Context, baseURL, envID string, schema *SchemaBuild
 	}
 
 	return nil
+}
+
+// NotificationBuilder provides a fluent API for building notification configurations
+type NotificationBuilder struct {
+	enabled   bool
+	notifiers []string
+}
+
+// NewNotification creates a new notification builder
+func NewNotification() *NotificationBuilder {
+	return &NotificationBuilder{
+		enabled:   true,
+		notifiers: make([]string, 0),
+	}
+}
+
+// Enabled sets whether notifications are enabled
+func (nb *NotificationBuilder) Enabled(enabled bool) *NotificationBuilder {
+	nb.enabled = enabled
+	return nb
+}
+
+// Notifier adds a notifier ID to the list
+func (nb *NotificationBuilder) Notifier(id string) *NotificationBuilder {
+	nb.notifiers = append(nb.notifiers, id)
+	return nb
+}
+
+// Notifiers adds multiple notifier IDs
+func (nb *NotificationBuilder) Notifiers(ids ...string) *NotificationBuilder {
+	nb.notifiers = append(nb.notifiers, ids...)
+	return nb
+}
+
+// Build converts the builder to a NotificationConfig
+func (nb *NotificationBuilder) Build() *achem.NotificationConfig {
+	return &achem.NotificationConfig{
+		Enabled:   nb.enabled,
+		Notifiers: nb.notifiers,
+	}
 }
