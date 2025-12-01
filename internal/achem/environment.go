@@ -114,7 +114,9 @@ func (e *Environment) Step() {
 				continue
 			}
 
-			if ctx.Random() > r.Rate() {
+			// Use effective rate (base rate + catalyst effects)
+			effectiveRate := r.EffectiveRate(m, view)
+			if ctx.Random() > effectiveRate {
 				continue
 			}
 

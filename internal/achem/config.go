@@ -58,6 +58,14 @@ type PartnerConfig struct {
 	Count   int         `json:"count"`   // number of partners required (default: 1)
 }
 
+// CatalystConfig represents a catalyst molecule that increases reaction rate
+type CatalystConfig struct {
+	Species string      `json:"species"`              // species of the catalyst
+	Where   WhereConfig `json:"where,omitempty"`      // conditions for catalyst matching
+	RateBoost float64   `json:"rate_boost,omitempty"` // amount to add to rate (default: 0.1)
+	MaxRate  *float64   `json:"max_rate,omitempty"`   // maximum effective rate (default: 1.0)
+}
+
 type InputConfig struct {
 	Species  string          `json:"species"`
 	Where    WhereConfig     `json:"where,omitempty"`
@@ -87,11 +95,12 @@ type EffectConfig struct {
 }
 
 type ReactionConfig struct {
-	ID      string         `json:"id"`
-	Name    string         `json:"name"`
-	Input   InputConfig    `json:"input"`
-	Rate    float64        `json:"rate"`
-	Effects []EffectConfig `json:"effects"`
+	ID        string           `json:"id"`
+	Name      string           `json:"name"`
+	Input     InputConfig      `json:"input"`
+	Rate      float64          `json:"rate"`
+	Catalysts []CatalystConfig `json:"catalysts,omitempty"` // catalysts that increase reaction rate
+	Effects   []EffectConfig   `json:"effects"`
 }
 
 type SchemaConfig struct {

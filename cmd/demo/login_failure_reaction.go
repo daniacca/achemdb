@@ -21,6 +21,9 @@ func (r *LoginFailureToSuspicionReaction) Name() string { return "Promote login 
 func (r *LoginFailureToSuspicionReaction) Rate() float64 {
 	return r.baseRate
 }
+func (r *LoginFailureToSuspicionReaction) EffectiveRate(m achem.Molecule, env achem.EnvView) float64 {
+	return r.baseRate
+}
 
 func (r *LoginFailureToSuspicionReaction) InputPattern(m achem.Molecule) bool {
 	if m.Species != achem.SpeciesName("Event") {

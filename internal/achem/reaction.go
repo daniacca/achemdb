@@ -42,6 +42,10 @@ type Reaction interface {
 	// Rate: base intensity (0..1). It will be modified by catalysts, etc.
 	Rate() float64
 
+	// EffectiveRate: calculates the effective rate considering catalysts.
+	// Returns the base rate modified by any matching catalysts in the environment.
+	EffectiveRate(m Molecule, env EnvView) float64
+
 	// Apply: try to apply the reaction to a molecule, given the context.
 	// If nothing happens, it can return an empty ReactionEffect.
 	Apply(m Molecule, env EnvView, ctx ReactionContext) ReactionEffect

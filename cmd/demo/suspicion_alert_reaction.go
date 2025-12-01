@@ -19,6 +19,9 @@ func (r *SuspicionToAlertReaction) Name() string { return "Promote suspicions to
 func (r *SuspicionToAlertReaction) Rate() float64 {
 	return r.baseRate
 }
+func (r *SuspicionToAlertReaction) EffectiveRate(m achem.Molecule, env achem.EnvView) float64 {
+	return r.baseRate
+}
 
 func (r *SuspicionToAlertReaction) InputPattern(m achem.Molecule) bool {
 	return m.Species == achem.SpeciesName("Suspicion")

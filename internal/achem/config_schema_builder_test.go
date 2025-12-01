@@ -4,6 +4,31 @@ import (
 	"testing"
 )
 
+// testEnvView is a simple EnvView implementation for testing
+type testEnvView struct {
+	molecules []Molecule
+}
+
+func (v testEnvView) MoleculesBySpecies(species SpeciesName) []Molecule {
+	var result []Molecule
+	for _, m := range v.molecules {
+		if m.Species == species {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+func (v testEnvView) Find(filter func(Molecule) bool) []Molecule {
+	var result []Molecule
+	for _, m := range v.molecules {
+		if filter(m) {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
 func TestConfigReaction_IfThenElse_FieldCondition(t *testing.T) {
 	cfg := ReactionConfig{
 		ID:   "test-if",
@@ -485,6 +510,373 @@ func TestConfigReaction_Partners_CountZero(t *testing.T) {
 	// Should have only 1 molecule (no partner, no reaction)
 	if len(molecules) != 1 {
 		t.Fatalf("Expected 1 molecule (count 0 defaults to 1, no partner), got %d", len(molecules))
+	}
+}
+
+func TestConfigReaction_Catalysts_Basic(t *testing.T) {
+	cfg := ReactionConfig{
+		ID:   "test-catalyst",
+		Name: "Test Catalyst",
+		Input: InputConfig{
+			Species: "Input",
+		},
+		Rate: 0.5, // Base rate 0.5
+		Catalysts: []CatalystConfig{
+			{
+				Species:   "Catalyst",
+				RateBoost: 0.3, // Should boost to 0.8
+			},
+		},
+		Effects: []EffectConfig{
+			{
+				Create: &CreateEffectConfig{
+					Species: "Output",
+				},
+			},
+		},
+	}
+
+	reaction := &ConfigReaction{cfg: cfg}
+	schema := NewSchema("test").WithReactions(reaction)
+	env := NewEnvironment(schema)
+
+	// Create input molecule
+	inputMol := NewMolecule("Input", nil, 0)
+	env.Insert(inputMol)
+
+	// Check effective rate without catalyst
+	effectiveRate := reaction.EffectiveRate(inputMol, testEnvView{molecules: []Molecule{inputMol}})
+	if effectiveRate != 0.5 {
+		t.Errorf("Expected effective rate 0.5 without catalyst, got %f", effectiveRate)
+	}
+
+	// Add catalyst
+	catalystMol := NewMolecule("Catalyst", nil, 0)
+	env.Insert(catalystMol)
+
+	// Check effective rate with catalyst
+	allMolecules := env.AllMolecules()
+	effectiveRate = reaction.EffectiveRate(inputMol, testEnvView{molecules: allMolecules})
+	if effectiveRate != 0.8 {
+		t.Errorf("Expected effective rate 0.8 with catalyst, got %f", effectiveRate)
+	}
+}
+
+func TestConfigReaction_Catalysts_WithWhere(t *testing.T) {
+	cfg := ReactionConfig{
+		ID:   "test-catalyst-where",
+		Name: "Test Catalyst With Where",
+		Input: InputConfig{
+			Species: "Input",
+		},
+		Rate: 0.3,
+		Catalysts: []CatalystConfig{
+			{
+				Species:   "Catalyst",
+				Where:     WhereConfig{"type": EqCondition{Eq: "$m.type"}},
+				RateBoost: 0.4,
+			},
+		},
+		Effects: []EffectConfig{
+			{
+				Create: &CreateEffectConfig{
+					Species: "Output",
+				},
+			},
+		},
+	}
+
+	reaction := &ConfigReaction{cfg: cfg}
+	schema := NewSchema("test").WithReactions(reaction)
+	env := NewEnvironment(schema)
+
+	// Create input molecule with type
+	inputMol := NewMolecule("Input", map[string]any{"type": "A"}, 0)
+	env.Insert(inputMol)
+
+	// Add catalyst with matching type
+	catalystMol1 := NewMolecule("Catalyst", map[string]any{"type": "A"}, 0)
+	env.Insert(catalystMol1)
+
+	// Add catalyst with non-matching type
+	catalystMol2 := NewMolecule("Catalyst", map[string]any{"type": "B"}, 0)
+	env.Insert(catalystMol2)
+
+	allMolecules := env.AllMolecules()
+	effectiveRate := reaction.EffectiveRate(inputMol, testEnvView{molecules: allMolecules})
+	// Should be 0.3 (base) + 0.4 (boost from matching catalyst) = 0.7
+	if effectiveRate != 0.7 {
+		t.Errorf("Expected effective rate 0.7 with matching catalyst, got %f", effectiveRate)
+	}
+}
+
+func TestConfigReaction_Catalysts_MaxRate(t *testing.T) {
+	maxRate := 0.6
+	cfg := ReactionConfig{
+		ID:   "test-catalyst-max",
+		Name: "Test Catalyst Max Rate",
+		Input: InputConfig{
+			Species: "Input",
+		},
+		Rate: 0.3,
+		Catalysts: []CatalystConfig{
+			{
+				Species:   "Catalyst",
+				RateBoost: 0.5, // Would make it 0.8, but max is 0.6
+				MaxRate:   &maxRate,
+			},
+		},
+		Effects: []EffectConfig{
+			{
+				Create: &CreateEffectConfig{
+					Species: "Output",
+				},
+			},
+		},
+	}
+
+	reaction := &ConfigReaction{cfg: cfg}
+	schema := NewSchema("test").WithReactions(reaction)
+	env := NewEnvironment(schema)
+
+	inputMol := NewMolecule("Input", nil, 0)
+	env.Insert(inputMol)
+
+	catalystMol := NewMolecule("Catalyst", nil, 0)
+	env.Insert(catalystMol)
+
+	allMolecules := env.AllMolecules()
+	effectiveRate := reaction.EffectiveRate(inputMol, testEnvView{molecules: allMolecules})
+	// Should be capped at 0.6 (max rate), not 0.8
+	if effectiveRate != 0.6 {
+		t.Errorf("Expected effective rate 0.6 (capped by max), got %f", effectiveRate)
+	}
+}
+
+func TestConfigReaction_Catalysts_Multiple(t *testing.T) {
+	cfg := ReactionConfig{
+		ID:   "test-catalyst-multiple",
+		Name: "Test Multiple Catalysts",
+		Input: InputConfig{
+			Species: "Input",
+		},
+		Rate: 0.2,
+		Catalysts: []CatalystConfig{
+			{
+				Species:   "Catalyst1",
+				RateBoost: 0.2,
+			},
+			{
+				Species:   "Catalyst2",
+				RateBoost: 0.3,
+			},
+		},
+		Effects: []EffectConfig{
+			{
+				Create: &CreateEffectConfig{
+					Species: "Output",
+				},
+			},
+		},
+	}
+
+	reaction := &ConfigReaction{cfg: cfg}
+	schema := NewSchema("test").WithReactions(reaction)
+	env := NewEnvironment(schema)
+
+	inputMol := NewMolecule("Input", nil, 0)
+	env.Insert(inputMol)
+
+	// Add both catalysts
+	catalyst1 := NewMolecule("Catalyst1", nil, 0)
+	catalyst2 := NewMolecule("Catalyst2", nil, 0)
+	env.Insert(catalyst1)
+	env.Insert(catalyst2)
+
+	allMolecules := env.AllMolecules()
+	effectiveRate := reaction.EffectiveRate(inputMol, testEnvView{molecules: allMolecules})
+	// Should be 0.2 (base) + 0.2 (catalyst1) + 0.3 (catalyst2) = 0.7
+	if effectiveRate != 0.7 {
+		t.Errorf("Expected effective rate 0.7 with multiple catalysts, got %f", effectiveRate)
+	}
+}
+
+func TestConfigReaction_Catalysts_DefaultBoost(t *testing.T) {
+	cfg := ReactionConfig{
+		ID:   "test-catalyst-default",
+		Name: "Test Catalyst Default Boost",
+		Input: InputConfig{
+			Species: "Input",
+		},
+		Rate: 0.4,
+		Catalysts: []CatalystConfig{
+			{
+				Species: "Catalyst",
+				// No RateBoost specified, should default to 0.1
+			},
+		},
+		Effects: []EffectConfig{
+			{
+				Create: &CreateEffectConfig{
+					Species: "Output",
+				},
+			},
+		},
+	}
+
+	reaction := &ConfigReaction{cfg: cfg}
+	schema := NewSchema("test").WithReactions(reaction)
+	env := NewEnvironment(schema)
+
+	inputMol := NewMolecule("Input", nil, 0)
+	env.Insert(inputMol)
+
+	catalystMol := NewMolecule("Catalyst", nil, 0)
+	env.Insert(catalystMol)
+
+	allMolecules := env.AllMolecules()
+	effectiveRate := reaction.EffectiveRate(inputMol, testEnvView{molecules: allMolecules})
+	// Should be 0.4 (base) + 0.1 (default boost) = 0.5
+	if effectiveRate != 0.5 {
+		t.Errorf("Expected effective rate 0.5 with default boost, got %f", effectiveRate)
+	}
+}
+
+func TestConfigReaction_Catalysts_RateCappedAtOne(t *testing.T) {
+	cfg := ReactionConfig{
+		ID:   "test-catalyst-cap",
+		Name: "Test Catalyst Rate Cap",
+		Input: InputConfig{
+			Species: "Input",
+		},
+		Rate: 0.8,
+		Catalysts: []CatalystConfig{
+			{
+				Species:   "Catalyst",
+				RateBoost: 0.5, // Would make it 1.3, but should cap at 1.0
+			},
+		},
+		Effects: []EffectConfig{
+			{
+				Create: &CreateEffectConfig{
+					Species: "Output",
+				},
+			},
+		},
+	}
+
+	reaction := &ConfigReaction{cfg: cfg}
+	schema := NewSchema("test").WithReactions(reaction)
+	env := NewEnvironment(schema)
+
+	inputMol := NewMolecule("Input", nil, 0)
+	env.Insert(inputMol)
+
+	catalystMol := NewMolecule("Catalyst", nil, 0)
+	env.Insert(catalystMol)
+
+	allMolecules := env.AllMolecules()
+	effectiveRate := reaction.EffectiveRate(inputMol, testEnvView{molecules: allMolecules})
+	// Should be capped at 1.0
+	if effectiveRate != 1.0 {
+		t.Errorf("Expected effective rate 1.0 (capped), got %f", effectiveRate)
+	}
+}
+
+func TestConfigReaction_Catalysts_CanBeSameMolecule(t *testing.T) {
+	cfg := ReactionConfig{
+		ID:   "test-catalyst-self",
+		Name: "Test Catalyst Can Be Self",
+		Input: InputConfig{
+			Species: "Input",
+		},
+		Rate: 0.3,
+		Catalysts: []CatalystConfig{
+			{
+				Species:   "Input", // Same species as input
+				RateBoost: 0.2,
+			},
+		},
+		Effects: []EffectConfig{
+			{
+				Create: &CreateEffectConfig{
+					Species: "Output",
+				},
+			},
+		},
+	}
+
+	reaction := &ConfigReaction{cfg: cfg}
+	schema := NewSchema("test").WithReactions(reaction)
+	env := NewEnvironment(schema)
+
+	// Create input molecule - it can catalyze itself
+	inputMol := NewMolecule("Input", nil, 0)
+	env.Insert(inputMol)
+
+	allMolecules := env.AllMolecules()
+	effectiveRate := reaction.EffectiveRate(inputMol, testEnvView{molecules: allMolecules})
+	// Should be 0.3 (base) + 0.2 (self-catalysis) = 0.5
+	if effectiveRate != 0.5 {
+		t.Errorf("Expected effective rate 0.5 with self-catalysis, got %f", effectiveRate)
+	}
+}
+
+func TestConfigReaction_Catalysts_Integration(t *testing.T) {
+	// Test that catalysts actually increase the probability of reaction firing
+	cfg := ReactionConfig{
+		ID:   "test-catalyst-integration",
+		Name: "Test Catalyst Integration",
+		Input: InputConfig{
+			Species: "Input",
+		},
+		Rate: 0.1, // Low base rate
+		Catalysts: []CatalystConfig{
+			{
+				Species:   "Catalyst",
+				RateBoost: 0.8, // High boost to make it 0.9
+			},
+		},
+		Effects: []EffectConfig{
+			{
+				Create: &CreateEffectConfig{
+					Species: "Output",
+				},
+			},
+		},
+	}
+
+	reaction := &ConfigReaction{cfg: cfg}
+	schema := NewSchema("test").WithReactions(reaction)
+	env := NewEnvironment(schema)
+
+	// Create input molecule
+	inputMol := NewMolecule("Input", nil, 0)
+	env.Insert(inputMol)
+
+	// Without catalyst, reaction should rarely fire (rate 0.1)
+	// We can't test probability deterministically, but we can test that
+	// the effective rate is higher with catalyst
+
+	// Check without catalyst
+	effectiveRateNoCat := reaction.EffectiveRate(inputMol, testEnvView{molecules: []Molecule{inputMol}})
+	if effectiveRateNoCat != 0.1 {
+		t.Errorf("Expected effective rate 0.1 without catalyst, got %f", effectiveRateNoCat)
+	}
+
+	// Add catalyst
+	catalystMol := NewMolecule("Catalyst", nil, 0)
+	env.Insert(catalystMol)
+
+	// Check with catalyst
+	allMolecules := env.AllMolecules()
+	effectiveRateWithCat := reaction.EffectiveRate(inputMol, testEnvView{molecules: allMolecules})
+	if effectiveRateWithCat != 0.9 {
+		t.Errorf("Expected effective rate 0.9 with catalyst, got %f", effectiveRateWithCat)
+	}
+
+	if effectiveRateWithCat <= effectiveRateNoCat {
+		t.Error("Expected effective rate to be higher with catalyst")
 	}
 }
 

@@ -19,6 +19,83 @@ func (r *ConfigReaction) Rate() float64 {
 	return r.cfg.Rate
 }
 
+// EffectiveRate calculates the effective rate considering catalysts
+func (r *ConfigReaction) EffectiveRate(m Molecule, env EnvView) float64 {
+	baseRate := r.Rate()
+	
+	// If no catalysts, return base rate
+	if len(r.cfg.Catalysts) == 0 {
+		return baseRate
+	}
+	
+	effectiveRate := baseRate
+	maxRate := 1.0
+	
+	// Check each catalyst
+	for _, catalystCfg := range r.cfg.Catalysts {
+		catalysts := findCatalysts(catalystCfg, m, env)
+		if len(catalysts) > 0 {
+			// Catalyst found, boost the rate
+			rateBoost := catalystCfg.RateBoost
+			if rateBoost <= 0 {
+				rateBoost = 0.1 // default boost
+			}
+			effectiveRate += rateBoost
+			
+			// Update max rate if this catalyst specifies one
+			if catalystCfg.MaxRate != nil && *catalystCfg.MaxRate < maxRate {
+				maxRate = *catalystCfg.MaxRate
+			}
+		}
+	}
+	
+	// Ensure rate is between 0 and 1 and maxRate is respected
+	if effectiveRate > maxRate {
+		effectiveRate = maxRate
+	}
+
+	if effectiveRate < 0 {
+		effectiveRate = 0
+	}
+	
+	if effectiveRate > 1 {
+		effectiveRate = 1
+	}
+	
+	return effectiveRate
+}
+
+// findCatalysts finds catalyst molecules matching the catalyst config
+func findCatalysts(catalystCfg CatalystConfig, m Molecule, env EnvView) []Molecule {
+	// Get all molecules of the specified species
+	candidates := env.MoleculesBySpecies(SpeciesName(catalystCfg.Species))
+
+	var matches []Molecule
+	for _, candidate := range candidates {
+		// Catalysts can be the same molecule or different molecules
+		// (unlike partners, catalysts don't exclude the molecule itself)
+
+		// Check where conditions
+		matchesWhere := true
+		for field, cond := range catalystCfg.Where {
+			// Resolve the condition value (might be "$m.field")
+			condValue := resolveValueFromMolecule(cond.Eq, m)
+			
+			candidateValue, ok := candidate.Payload[field]
+			if !ok || candidateValue != condValue {
+				matchesWhere = false
+				break
+			}
+		}
+
+		if matchesWhere {
+			matches = append(matches, candidate)
+		}
+	}
+
+	return matches
+}
+
 // match species + where.eq on payload
 // Note: Partner matching is done in Apply, not here, for performance reasons
 func (r *ConfigReaction) InputPattern(m Molecule) bool {

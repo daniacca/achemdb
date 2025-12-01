@@ -19,6 +19,9 @@ func (r *DecayReaction) Name() string { return "Natural decay of Suspicion/Alert
 func (r *DecayReaction) Rate() float64 {
 	return r.baseRate
 }
+func (r *DecayReaction) EffectiveRate(m achem.Molecule, env achem.EnvView) float64 {
+	return r.baseRate
+}
 
 func (r *DecayReaction) InputPattern(m achem.Molecule) bool {
 	return m.Species == achem.SpeciesName("Suspicion") ||
