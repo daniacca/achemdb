@@ -45,3 +45,5 @@ go.work
 
 coverage/
 bin/
+
+achemdb-server
