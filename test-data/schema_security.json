@@ -31,7 +31,7 @@
           "create": {
             "species": "Suspicion",
             "payload": {
-              "ip": "TODO:m.ip",
+              "ip": "$m.ip",
               "kind": "login_failed"
             },
             "energy": 1.0,

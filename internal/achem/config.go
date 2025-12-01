@@ -14,9 +14,54 @@ type EqCondition struct {
 // Where config can at the moment only use Equality conditions
 type WhereConfig map[string]EqCondition
 
+// Comparison operators for conditions
+type ComparisonOp string
+
+const (
+	OpEq  ComparisonOp = "eq"  // equals
+	OpNe  ComparisonOp = "ne"  // not equals
+	OpGt  ComparisonOp = "gt"  // greater than
+	OpGte ComparisonOp = "gte" // greater than or equal
+	OpLt  ComparisonOp = "lt"  // less than
+	OpLte ComparisonOp = "lte" // less than or equal
+)
+
+// FieldCondition represents a condition on a molecule field
+type FieldCondition struct {
+	Field string `json:"field"` // field name (e.g., "energy", or "$m.field" for payload)
+	Op    string `json:"op"`    // operator: "eq", "ne", "gt", "gte", "lt", "lte"
+	Value any    `json:"value"` // comparison value
+}
+
+// CountMoleculesConfig represents a count aggregation operation
+type CountMoleculesConfig struct {
+	Species string      `json:"species"` // species to count
+	Where   WhereConfig `json:"where,omitempty"`
+	Op      map[string]any `json:"op"`   // operator and value, e.g., {"gte": 3}
+}
+
+// IfConditionConfig represents a conditional check
+type IfConditionConfig struct {
+	// Either a simple field condition
+	Field string `json:"field,omitempty"`
+	Op    string `json:"op,omitempty"`
+	Value any    `json:"value,omitempty"`
+	
+	// Or a count_molecules aggregation
+	CountMolecules *CountMoleculesConfig `json:"count_molecules,omitempty"`
+}
+
+// PartnerConfig represents a partner molecule requirement
+type PartnerConfig struct {
+	Species string      `json:"species"` // species of the partner
+	Where   WhereConfig `json:"where,omitempty"`
+	Count   int         `json:"count"`   // number of partners required (default: 1)
+}
+
 type InputConfig struct {
-	Species string       `json:"species"`
-	Where   WhereConfig  `json:"where,omitempty"`
+	Species  string          `json:"species"`
+	Where    WhereConfig     `json:"where,omitempty"`
+	Partners []PartnerConfig `json:"partners,omitempty"` // partner molecules required for the reaction
 }
 
 type CreateEffectConfig struct {
@@ -34,7 +79,11 @@ type EffectConfig struct {
 	Consume bool                 `json:"consume,omitempty"`
 	Create  *CreateEffectConfig  `json:"create,omitempty"`
 	Update  *UpdateEffectConfig  `json:"update,omitempty"`
-	// todo: add other effects, like If, Log, etc.
+	
+	// Conditional effects
+	If   *IfConditionConfig `json:"if,omitempty"`   // condition to check
+	Then []EffectConfig     `json:"then,omitempty"` // effects if condition is true
+	Else []EffectConfig     `json:"else,omitempty"` // effects if condition is false
 }
 
 type ReactionConfig struct {
