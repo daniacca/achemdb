@@ -6,22 +6,22 @@ type ReactionContext struct {
 }
 
 type ReactionEffect struct {
-	Consume        bool       // se true, la molecola di input viene rimossa
-	Update         *Molecule  // versione aggiornata della molecola di input
-	NewMolecules   []Molecule // nuove molecole da inserire
-	AdditionalOps  []Operation // estendibile in futuro (es. log, metrics)
+	Consume        bool         // if true, the input molecule will be removed
+	Update         *Molecule    // updated version of the input molecule
+	NewMolecules   []Molecule   // new molecules to insert
+	AdditionalOps  []Operation  // extendable in the future (e.g. log, metrics)
 }
 
-// per il PoC possiamo anche ignorare Operation e usare solo Consume/Update/NewMolecules.
+// Actually a placeholder for future operations
 type Operation struct {
-	// placeholder
+	// To be done...
 }
 
 type EnvView interface {
-	// Query semplice: restituisce tutte le molecole di una specie
+	// Simple query: returns all molecules of a species
 	MoleculesBySpecies(species SpeciesName) []Molecule
 
-	// Query più flessibile
+	// Flexible query
 	Find(filter func(Molecule) bool) []Molecule
 }
 
@@ -29,13 +29,13 @@ type Reaction interface {
 	ID() string
 	Name() string
 
-	// InputPattern: la reazione è interessata a questa molecola?
+	// InputPattern: is the reaction interested in this molecule?
 	InputPattern(m Molecule) bool
 
-	// Rate: "intensità" di base (0..1). Poi verrà modificata da catalizzatori, ecc.
+	// Rate: base intensity (0..1). It will be modified by catalysts, etc.
 	Rate() float64
 
-	// Apply: prova ad applicare la reazione a una molecola, dato il contesto.
-	// Se non avviene nulla, può restituire un ReactionEffect vuoto.
+	// Apply: try to apply the reaction to a molecule, given the context.
+	// If nothing happens, it can return an empty ReactionEffect.
 	Apply(m Molecule, env EnvView, ctx ReactionContext) ReactionEffect
 }

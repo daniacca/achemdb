@@ -1,8 +1,10 @@
-.PHONY: help build run clean demo test test-coverage test-coverage-html test-verbose
+.PHONY: help build run clean demo test test-coverage test-coverage-html test-verbose build-server run-server server
 
 # Variables
 BINARY_NAME=demo
 DEMO_DIR=cmd/demo
+SERVER_BINARY_NAME=achemdb-server
+SERVER_DIR=cmd/achemdb-server
 BUILD_DIR=bin
 COVERAGE_DIR=coverage
 
@@ -12,6 +14,9 @@ help:
 	@echo "  make build              - Build the demo binary"
 	@echo "  make run                - Run the demo directly (without building)"
 	@echo "  make demo                - Build and run the demo"
+	@echo "  make build-server        - Build the achemdb-server binary"
+	@echo "  make run-server          - Run the achemdb-server directly (without building)"
+	@echo "  make server              - Build and run the achemdb-server"
 	@echo "  make test                - Run all tests"
 	@echo "  make test-verbose        - Run tests with verbose output"
 	@echo "  make test-coverage       - Run tests with coverage report"
@@ -34,6 +39,23 @@ run:
 demo: build
 	@echo "Running demo..."
 	@./$(BUILD_DIR)/$(BINARY_NAME)
+
+# Build the achemdb-server binary
+build-server:
+	@echo "Building achemdb-server..."
+	@mkdir -p $(BUILD_DIR)
+	@go build -o $(BUILD_DIR)/$(SERVER_BINARY_NAME) ./$(SERVER_DIR)
+	@echo "Binary built: $(BUILD_DIR)/$(SERVER_BINARY_NAME)"
+
+# Run the achemdb-server directly (without building)
+run-server:
+	@echo "Running achemdb-server..."
+	@go run ./$(SERVER_DIR)
+
+# Build and run the achemdb-server
+server: build-server
+	@echo "Running achemdb-server..."
+	@./$(BUILD_DIR)/$(SERVER_BINARY_NAME)
 
 # Run tests
 test:
