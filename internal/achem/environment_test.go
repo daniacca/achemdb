@@ -159,7 +159,7 @@ func TestEnvironment_Step_WithReaction(t *testing.T) {
 		apply: func(m Molecule, env EnvView, ctx ReactionContext) ReactionEffect {
 			consumed = true
 			return ReactionEffect{
-				Consume: true,
+				ConsumedIDs: []MoleculeID{m.ID},
 				NewMolecules: []Molecule{
 					NewMolecule("Output", map[string]any{"from": "Input"}, ctx.EnvTime),
 				},
@@ -211,8 +211,10 @@ func TestEnvironment_Step_UpdateMolecule(t *testing.T) {
 			m.Energy = 5.0
 			m.LastTouchedAt = ctx.EnvTime
 			return ReactionEffect{
-				Consume: false,
-				Update:  &m,
+				ConsumedIDs: []MoleculeID{},
+				Changes: []MoleculeChange{
+					{ID: m.ID, Updated: &m},
+				},
 			}
 		},
 	}
@@ -290,8 +292,7 @@ func TestEnvironment_Step_MultipleReactions(t *testing.T) {
 		apply: func(m Molecule, env EnvView, ctx ReactionContext) ReactionEffect {
 			r1Fired = true
 			return ReactionEffect{
-				Consume: false, // Don't consume, let r2 also process
-				Update:  nil,
+				ConsumedIDs: []MoleculeID{}, // Don't consume, let r2 also process
 			}
 		},
 	}
@@ -305,7 +306,7 @@ func TestEnvironment_Step_MultipleReactions(t *testing.T) {
 		apply: func(m Molecule, env EnvView, ctx ReactionContext) ReactionEffect {
 			r2Fired = true
 			return ReactionEffect{
-				Consume: true, // Consume after both reactions
+				ConsumedIDs: []MoleculeID{m.ID}, // Consume after both reactions
 			}
 		},
 	}
@@ -340,7 +341,7 @@ func TestEnvironment_Step_NewMoleculeAutoID(t *testing.T) {
 				Payload: map[string]any{},
 			}
 			return ReactionEffect{
-				Consume:      true,
+				ConsumedIDs:  []MoleculeID{m.ID},
 				NewMolecules: []Molecule{newMol},
 			}
 		},

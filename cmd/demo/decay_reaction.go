@@ -32,12 +32,14 @@ func (r *DecayReaction) Apply(m achem.Molecule, env achem.EnvView, ctx achem.Rea
 
 	if updated.Energy <= 0 {
 		return achem.ReactionEffect{
-			Consume: true,
+			ConsumedIDs: []achem.MoleculeID{m.ID},
 		}
 	}
 
 	return achem.ReactionEffect{
-		Consume: false,
-		Update:  &updated,
+		ConsumedIDs: []achem.MoleculeID{},
+		Changes: []achem.MoleculeChange{
+			{ID: m.ID, Updated: &updated},
+		},
 	}
 }

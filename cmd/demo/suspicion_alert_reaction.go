@@ -67,8 +67,10 @@ func (r *SuspicionToAlertReaction) Apply(m achem.Molecule, env achem.EnvView, ct
 	updated.LastTouchedAt = ctx.EnvTime
 
 	return achem.ReactionEffect{
-		Consume: false,
-		Update:  &updated,
+		ConsumedIDs: []achem.MoleculeID{},
+		Changes: []achem.MoleculeChange{
+			{ID: m.ID, Updated: &updated},
+		},
 		NewMolecules: []achem.Molecule{
 			alert,
 		},

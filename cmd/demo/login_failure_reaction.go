@@ -41,8 +41,7 @@ func (r *LoginFailureToSuspicionReaction) Apply(m achem.Molecule, env achem.EnvV
 	susp.Stability = 1.0
 
 	return achem.ReactionEffect{
-		Consume:      true, // consumiamo l'Event
-		Update:       nil,
+		ConsumedIDs:  []achem.MoleculeID{m.ID}, // consumiamo l'Event
 		NewMolecules: []achem.Molecule{susp},
 	}
 }

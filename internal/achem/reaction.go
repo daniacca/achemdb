@@ -5,11 +5,18 @@ type ReactionContext struct {
 	Random  func() float64
 }
 
+type MoleculeChange struct {
+	ID      MoleculeID
+	Updated *Molecule // if nil + present in ConsumedIDs => delete
+}
+
+// The effect of a reactiion could consume one or more molecules,
+// transform one or more molecules to other molecules, or create new molecules
 type ReactionEffect struct {
-	Consume        bool         // if true, the input molecule will be removed
-	Update         *Molecule    // updated version of the input molecule
-	NewMolecules   []Molecule   // new molecules to insert
-	AdditionalOps  []Operation  // extendable in the future (e.g. log, metrics)
+	ConsumedIDs    []MoleculeID 		// molecules to remove
+	Changes        []MoleculeChange		// molecules to update
+	NewMolecules   []Molecule   		// new molecules to insert
+	AdditionalOps  []Operation  		// extendable in the future (e.g. log, metrics)
 }
 
 // Actually a placeholder for future operations

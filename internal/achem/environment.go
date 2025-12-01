@@ -81,7 +81,7 @@ func (e *Environment) Step() {
 
 	e.time++
 
-	// snapshot delle molecole per passarlo alla EnvView
+	// snapshot
 	snapshot := make([]Molecule, 0, len(e.mols))
 	for _, m := range e.mols {
 		snapshot = append(snapshot, m)
@@ -93,37 +93,67 @@ func (e *Environment) Step() {
 		Random:  e.rand.Float64,
 	}
 
-	// Applichiamo reazioni molecola per molecola
-	for id, m := range e.mols {
+	// 1) collect all effects
+	consumed := make(map[MoleculeID]struct{})
+	changes := make(map[MoleculeID]Molecule)
+	newMolecules := make([]Molecule, 0)
+
+	for _, m := range snapshot {
+		if _, ok := consumed[m.ID]; ok {
+			continue
+		}
+
 		for _, r := range e.schema.Reactions() {
 			if !r.InputPattern(m) {
 				continue
 			}
 
-			// probabilità che la reazione "scatti"
 			if ctx.Random() > r.Rate() {
 				continue
 			}
 
-			effect := r.Apply(m, view, ctx)
+			eff := r.Apply(m, view, ctx)
 
-			if effect.Consume {
-				delete(e.mols, id)
-			} else if effect.Update != nil {
-				e.mols[id] = *effect.Update
-				m = *effect.Update
+			// mark consumed
+			for _, id := range eff.ConsumedIDs {
+				consumed[id] = struct{}{}
 			}
 
-			for _, nm := range effect.NewMolecules {
-				if nm.ID == "" {
-					nm.ID = MoleculeID(NewRandomID())
+			// apply changes (last-wins)
+			for _, ch := range eff.Changes {
+				if ch.Updated != nil {
+					changes[ch.ID] = *ch.Updated
 				}
-				if nm.CreatedAt == 0 {
-					nm.CreatedAt = e.time
-					nm.LastTouchedAt = e.time
-				}
-				e.mols[nm.ID] = nm
 			}
+
+			newMolecules = append(newMolecules, eff.NewMolecules...)
 		}
+	}
+
+	// 2) Apply changes to the environment
+
+	// 2.1 - remove consumed molecules
+	for id := range consumed {
+		delete(e.mols, id)
+	}
+
+	// 2.2 - apply changes
+	for id, m := range changes {
+		if _, removed := consumed[id]; removed {
+			continue
+		}
+		e.mols[id] = m
+	}
+
+	// 2.3 - insert new molecules
+	for _, nm := range newMolecules {
+		if nm.ID == "" {
+			nm.ID = MoleculeID(NewRandomID())
+		}
+		if nm.CreatedAt == 0 {
+			nm.CreatedAt = e.time
+			nm.LastTouchedAt = e.time
+		}
+		e.mols[nm.ID] = nm
 	}
 }

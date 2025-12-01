@@ -2,6 +2,7 @@ package achem
 
 import (
 	"fmt"
+	"slices"
 )
 
 // ConfigReaction will be used to build a Reaction from a ReactionConfig
@@ -58,22 +59,45 @@ func resolveValueFromMolecule(val any, m Molecule) any {
 
 // Apply will apply the effects of the reaction to the molecule
 func (r *ConfigReaction) Apply(m Molecule, env EnvView, ctx ReactionContext) ReactionEffect {
-	effect := ReactionEffect{}
+	effect := ReactionEffect{
+		ConsumedIDs:   []MoleculeID{},
+		Changes:       []MoleculeChange{},
+		NewMolecules:  []Molecule{},
+	}
 
 	for _, eff := range r.cfg.Effects {
 		// if at least one effect says to consume a molecule, we will consume it
 		if eff.Consume {
-			effect.Consume = true
+			// Add the molecule ID to ConsumedIDs if not already present
+			found := slices.Contains(effect.ConsumedIDs, m.ID)
+			if !found {
+				effect.ConsumedIDs = append(effect.ConsumedIDs, m.ID)
+			}
 		}
 
 		if eff.Update != nil {
-			if effect.Update == nil {
-				copy := m
-				effect.Update = &copy
+			// Find existing change for this molecule, or create a new one
+			var change *MoleculeChange
+			for i := range effect.Changes {
+				if effect.Changes[i].ID == m.ID {
+					change = &effect.Changes[i]
+					break
+				}
 			}
-			if eff.Update.EnergyAdd != nil {
-				effect.Update.Energy += *eff.Update.EnergyAdd
-				effect.Update.LastTouchedAt = ctx.EnvTime
+			
+			if change == nil {
+				// Create a copy of the molecule for the change
+				copy := m
+				effect.Changes = append(effect.Changes, MoleculeChange{
+					ID:      m.ID,
+					Updated: &copy,
+				})
+				change = &effect.Changes[len(effect.Changes)-1]
+			}
+
+			if eff.Update.EnergyAdd != nil && change.Updated != nil {
+				change.Updated.Energy += *eff.Update.EnergyAdd
+				change.Updated.LastTouchedAt = ctx.EnvTime
 			}
 		}
 

@@ -47,10 +47,10 @@ Reactions define how molecules transform. Each reaction implements:
 
 A `ReactionEffect` can:
 
-- Consume the input molecule
-- Update the input molecule
-- Create new molecules
-- Perform additional operations
+- Consume molecules (specify IDs in `ConsumedIDs`)
+- Update molecules (specify changes in `Changes`)
+- Create new molecules (add to `NewMolecules`)
+- Perform additional operations (via `AdditionalOps`)
 
 ### Environment
 
@@ -139,12 +139,26 @@ func (r *MyReaction) InputPattern(m achem.Molecule) bool {
 }
 
 func (r *MyReaction) Apply(m achem.Molecule, env achem.EnvView, ctx achem.ReactionContext) achem.ReactionEffect {
-    // Your reaction logic here
+    // Example: Transform molecule (consume input, create output)
+    newMol := achem.NewMolecule("NewSpecies", map[string]any{
+        "source": m.ID,
+    }, ctx.EnvTime)
+    
     return achem.ReactionEffect{
-        Consume:      false,
-        Update:       nil,
-        NewMolecules: []achem.Molecule{},
+        ConsumedIDs:  []achem.MoleculeID{m.ID}, // Consume the input molecule
+        NewMolecules: []achem.Molecule{newMol}, // Create new molecules
     }
+    
+    // Alternative: Update molecule without consuming
+    // updated := m
+    // updated.Energy += 1.0
+    // updated.LastTouchedAt = ctx.EnvTime
+    // return achem.ReactionEffect{
+    //     ConsumedIDs: []achem.MoleculeID{},
+    //     Changes: []achem.MoleculeChange{
+    //         {ID: m.ID, Updated: &updated},
+    //     },
+    // }
 }
 ```
 
