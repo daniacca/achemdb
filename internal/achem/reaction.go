@@ -44,6 +44,8 @@ type Reaction interface {
 
 	// EffectiveRate: calculates the effective rate considering catalysts.
 	// Returns the base rate modified by any matching catalysts in the environment.
+	// NOTE: this method must NOT HAVE ANY SIDE EFFECTS. It should only return the 
+	// effective rate, clamped between 0 and 1.
 	EffectiveRate(m Molecule, env EnvView) float64
 
 	// Apply: try to apply the reaction to a molecule, given the context.

@@ -77,15 +77,9 @@ func findCatalysts(catalystCfg CatalystConfig, m Molecule, env EnvView) []Molecu
 
 		// Check where conditions
 		matchesWhere := true
-		for field, cond := range catalystCfg.Where {
-			// Resolve the condition value (might be "$m.field")
-			condValue := resolveValueFromMolecule(cond.Eq, m)
-			
-			candidateValue, ok := candidate.Payload[field]
-			if !ok || candidateValue != condValue {
-				matchesWhere = false
-				break
-			}
+		// Check where conditions using shared helper
+		if !matchWhere(catalystCfg.Where, candidate, m) {
+			matchesWhere = false
 		}
 
 		if matchesWhere {
@@ -107,45 +101,13 @@ func (r *ConfigReaction) InputPattern(m Molecule) bool {
 		return true
 	}
 
-	for field, cond := range r.cfg.Input.Where {
-		val, ok := m.Payload[field]
-		if !ok {
-			return false
-		}
-		if cond.Eq != nil && val != cond.Eq {
-			return false
-		}
-	}
-
-	return true
+	// Use matchWhere with m as both candidate and origin to support $m.* references
+	return matchWhere(r.cfg.Input.Where, m, m)
 }
 
-// inner helper function to resolve values from molecules
+// resolveValueFromMolecule is a wrapper around resolveValueRef for backward compatibility
 func resolveValueFromMolecule(val any, m Molecule) any {
-	s, ok := val.(string)
-	if !ok {
-		return val
-	}
-	if len(s) > 3 && s[:3] == "$m." {
-		field := s[3:]
-		// Check if it's a molecule field (energy, stability, etc.)
-		switch field {
-		case "energy":
-			return m.Energy
-		case "stability":
-			return m.Stability
-		case "id":
-			return string(m.ID)
-		case "species":
-			return string(m.Species)
-		default:
-			// Otherwise, check payload
-			if v, ok := m.Payload[field]; ok {
-				return v
-			}
-		}
-	}
-	return val
+	return resolveValueRef(val, m)
 }
 
 // getFieldValue retrieves a field value from a molecule
@@ -275,8 +237,8 @@ func evaluateIfCondition(cond *IfConditionConfig, m Molecule, env EnvView) bool 
 		return false
 	}
 
-	// Resolve the comparison value (might be a reference like "$m.ip")
-	compareValue := resolveValueFromMolecule(cond.Value, m)
+		// Resolve the comparison value (might be a reference like "$m.ip")
+		compareValue := resolveValueRef(cond.Value, m)
 
 	return compareValues(fieldValue, compareValue, cond.Op)
 }
@@ -294,20 +256,8 @@ func evaluateCountMolecules(cfg *CountMoleculesConfig, m Molecule, env EnvView) 
 			continue
 		}
 
-		// Check where conditions
-		matchesWhere := true
-		for field, cond := range cfg.Where {
-			// Resolve the condition value (might be "$m.field")
-			condValue := resolveValueFromMolecule(cond.Eq, m)
-			
-			candidateValue, ok := candidate.Payload[field]
-			if !ok || candidateValue != condValue {
-				matchesWhere = false
-				break
-			}
-		}
-
-		if matchesWhere {
+		// Check where conditions using shared helper
+		if matchWhere(cfg.Where, candidate, m) {
 			matches = append(matches, candidate)
 		}
 	}
@@ -338,20 +288,8 @@ func findPartners(partnerCfg PartnerConfig, m Molecule, env EnvView) []Molecule 
 			continue
 		}
 
-		// Check where conditions
-		matchesWhere := true
-		for field, cond := range partnerCfg.Where {
-			// Resolve the condition value (might be "$m.field")
-			condValue := resolveValueFromMolecule(cond.Eq, m)
-			
-			candidateValue, ok := candidate.Payload[field]
-			if !ok || candidateValue != condValue {
-				matchesWhere = false
-				break
-			}
-		}
-
-		if matchesWhere {
+		// Check where conditions using shared helper
+		if matchWhere(partnerCfg.Where, candidate, m) {
 			matches = append(matches, candidate)
 		}
 	}
@@ -466,7 +404,7 @@ func (r *ConfigReaction) applyEffects(effects []EffectConfig, m Molecule, partne
 
 			// copy payload to the new molecule, resolving references
 			for k, v := range eff.Create.Payload {
-				nm.Payload[k] = resolveValueFromMolecule(v, m)
+				nm.Payload[k] = resolveValueRef(v, m)
 			}
 
 			if eff.Create.Energy != nil {

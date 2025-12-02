@@ -14,7 +14,6 @@ import (
 
 type Server struct {
 	manager       *achem.EnvironmentManager
-	notifierMgr   *achem.NotificationManager
 	globalNotifierMgr *achem.NotificationManager
 }
 
@@ -321,7 +320,7 @@ func (s *Server) handleNotifiersRoutes(w http.ResponseWriter, r *http.Request) {
 
 // GET /notifiers
 // List all registered notifiers
-func (s *Server) handleListNotifiers(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleListNotifiers(w http.ResponseWriter, _ *http.Request) {
 	notifierIDs := s.globalNotifierMgr.ListNotifiers()
 	
 	// Get notifier types
