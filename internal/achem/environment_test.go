@@ -371,13 +371,22 @@ func TestEnvironment_Step_NewMoleculeAutoID(t *testing.T) {
 }
 
 func TestEnvView_MoleculesBySpecies(t *testing.T) {
+	molecules := []Molecule{
+		NewMolecule("A", nil, 0),
+		NewMolecule("B", nil, 0),
+		NewMolecule("A", nil, 0),
+		NewMolecule("C", nil, 0),
+	}
+
+	// build per-species index
+	bySpecies := make(map[SpeciesName][]Molecule)
+	for _, m := range molecules {
+		bySpecies[m.Species] = append(bySpecies[m.Species], m)
+	}
+
 	view := envView{
-		molecules: []Molecule{
-			NewMolecule("A", nil, 0),
-			NewMolecule("B", nil, 0),
-			NewMolecule("A", nil, 0),
-			NewMolecule("C", nil, 0),
-		},
+		molecules: molecules,
+		bySpecies: bySpecies,
 	}
 
 	as := view.MoleculesBySpecies("A")

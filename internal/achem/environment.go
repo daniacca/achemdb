@@ -55,15 +55,29 @@ func (e *Environment) GetNotificationManager() *NotificationManager {
 // envView is a private adapter that exposes read-only methods
 type envView struct {
 	molecules []Molecule
+	bySpecies map[SpeciesName][]Molecule
 }
 
 func (v envView) MoleculesBySpecies(species SpeciesName) []Molecule {
-	out := make([]Molecule, 0)
-	for _, m := range v.molecules {
-		if m.Species == species {
-			out = append(out, m)
+	if v.bySpecies == nil {
+		// fallback for safety (should not happen if Step sets it)
+		out := make([]Molecule, 0)
+		for _, m := range v.molecules {
+			if m.Species == species {
+				out = append(out, m)
+			}
 		}
+		return out
 	}
+
+	mols, ok := v.bySpecies[species]
+	if !ok {
+		return nil
+	}
+
+	// return a copy to keep immutability guarantees
+	out := make([]Molecule, len(mols))
+	copy(out, mols)
 	return out
 }
 
@@ -117,7 +131,17 @@ func (e *Environment) Step() {
 	for _, m := range e.mols {
 		snapshot = append(snapshot, m)
 	}
-	view := envView{molecules: snapshot}
+
+	// build per-species index for fast lookup
+	bySpecies := make(map[SpeciesName][]Molecule)
+	for _, m := range snapshot {
+		bySpecies[m.Species] = append(bySpecies[m.Species], m)
+	}
+
+	view := envView{
+		molecules: snapshot,
+		bySpecies: bySpecies,
+	}
 
 	ctx := ReactionContext{
 		EnvTime: e.time,
