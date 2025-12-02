@@ -163,7 +163,7 @@ func (nm *NotificationManager) Enqueue(event NotificationEvent, notifierIDs []st
 
 // startWorkers starts n worker goroutines to process notification jobs
 func (nm *NotificationManager) startWorkers(n int) {
-	for i := 0; i < n; i++ {
+	for range n {
 		nm.wg.Add(1)
 		go nm.worker()
 	}
