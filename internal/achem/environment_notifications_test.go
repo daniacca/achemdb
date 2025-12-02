@@ -11,7 +11,7 @@ func TestEnvironment_Notifications_Webhook(t *testing.T) {
 	// Create a schema with a reaction that has notifications enabled
 	cfg := SchemaConfig{
 		Name:    "test",
-		Species: []SpeciesConfig{{Name: "Input"}},
+		Species: []SpeciesConfig{{Name: "Input"}, {Name: "Output"}},
 		Reactions: []ReactionConfig{
 			{
 				ID:   "test-reaction",

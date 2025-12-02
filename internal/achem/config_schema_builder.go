@@ -422,17 +422,15 @@ func (r *ConfigReaction) applyEffects(effects []EffectConfig, m Molecule, partne
 
 // BuildSchemaFromConfig converts a SchemaConfig to a Schema
 func BuildSchemaFromConfig(cfg SchemaConfig) (*Schema, error) {
-	if cfg.Name == "" {
-		return nil, fmt.Errorf("schema name is required")
+	// Validate the configuration first
+	if err := ValidateSchemaConfig(cfg); err != nil {
+		return nil, err
 	}
 
 	s := NewSchema(cfg.Name)
 
 	// Species
 	for _, sp := range cfg.Species {
-		if sp.Name == "" {
-			return nil, fmt.Errorf("species name is required")
-		}
 		s = s.WithSpecies(Species{
 			Name:        SpeciesName(sp.Name),
 			Description: sp.Description,
@@ -442,9 +440,6 @@ func BuildSchemaFromConfig(cfg SchemaConfig) (*Schema, error) {
 
 	// Reactions
 	for _, rc := range cfg.Reactions {
-		if rc.ID == "" {
-			return nil, fmt.Errorf("reaction id is required")
-		}
 		cr := &ConfigReaction{cfg: rc}
 		s = s.WithReactions(cr)
 	}
