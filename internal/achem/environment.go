@@ -1,7 +1,6 @@
 package achem
 
 import (
-	"context"
 	"math/rand"
 	"sync"
 	"time"
@@ -358,13 +357,8 @@ func (e *Environment) sendNotificationWithContext(r Reaction, m Molecule, view E
 		ctx.EnvTime,
 	)
 
-	// Send notification asynchronously to avoid blocking the step
-	go func() {
-		notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		_ = notifierMgr.Notify(notifyCtx, event, notifyCfg.Notifiers)
-	}()
+	// Enqueue notification for async processing (non-blocking)
+	notifierMgr.Enqueue(event, notifyCfg.Notifiers)
 }
 
 // getNotificationConfig extracts notification config from a reaction
