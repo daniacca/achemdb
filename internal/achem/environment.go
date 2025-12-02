@@ -121,9 +121,8 @@ func (e *Environment) AllMolecules() []Molecule {
 // a single step inside the environment, it will apply all reactions to all the molecules
 // collected in the snapshot. 
 func (e *Environment) Step() {
+	// 1) SNAPSHOT PHASE (under lock)
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	e.time++
 
 	// snapshot
@@ -138,6 +137,12 @@ func (e *Environment) Step() {
 		bySpecies[m.Species] = append(bySpecies[m.Species], m)
 	}
 
+	// build an ID→Molecule map for convenient lookups during the compute phase
+	snapshotByID := make(map[MoleculeID]Molecule, len(snapshot))
+	for _, m := range snapshot {
+		snapshotByID[m.ID] = m
+	}
+
 	view := envView{
 		molecules: snapshot,
 		bySpecies: bySpecies,
@@ -148,18 +153,28 @@ func (e *Environment) Step() {
 		Random:  e.rand.Float64,
 	}
 
-	// 1) collect all effects
+	// capture reactions once (schema is immutable once loaded)
+	reactions := e.schema.Reactions()
+
+	// capture envID and notifierMgr for use in compute phase (to avoid data races)
+	envID := e.envID
+	notifierMgr := e.notifierMgr
+
+	e.mu.Unlock()
+
+	// 2) COMPUTE PHASE (no lock)
 	consumed := make(map[MoleculeID]struct{})
-	consumedMolecules := make(map[MoleculeID]Molecule) // Store molecules before deletion for notifications
+	consumedMolecules := make(map[MoleculeID]Molecule)
 	changes := make(map[MoleculeID]Molecule)
 	newMolecules := make([]Molecule, 0)
 
 	for _, m := range snapshot {
+		// skip molecules already marked as consumed
 		if _, ok := consumed[m.ID]; ok {
 			continue
 		}
 
-		for _, r := range e.schema.Reactions() {
+		for _, r := range reactions {
 			if !r.InputPattern(m) {
 				continue
 			}
@@ -175,16 +190,16 @@ func (e *Environment) Step() {
 			// Check if reaction produced any effects (non-empty effect)
 			hasEffects := len(eff.ConsumedIDs) > 0 || len(eff.Changes) > 0 || len(eff.NewMolecules) > 0
 
-			// Store consumed molecules before marking them for deletion (for notifications)
+			// collect consumed molecules using the snapshot, not e.mols
 			for _, id := range eff.ConsumedIDs {
-				if mol, exists := e.mols[id]; exists {
+				if mol, exists := snapshotByID[id]; exists {
 					consumedMolecules[id] = mol
 				}
 			}
 
 			// Send notification if reaction fired and has effects
 			if hasEffects {
-				e.sendNotification(r, m, view, eff, ctx, consumedMolecules)
+				e.sendNotificationWithContext(r, m, view, eff, ctx, consumedMolecules, envID, notifierMgr)
 			}
 
 			// mark consumed
@@ -203,14 +218,16 @@ func (e *Environment) Step() {
 		}
 	}
 
-	// 2) Apply changes to the environment
+	// 3) APPLY PHASE (under lock again)
+	e.mu.Lock()
+	defer e.mu.Unlock()
 
-	// 2.1 - remove consumed molecules
+	// 3.1 - remove consumed molecules
 	for id := range consumed {
 		delete(e.mols, id)
 	}
 
-	// 2.2 - apply changes
+	// 3.2 - apply changes
 	for id, m := range changes {
 		if _, removed := consumed[id]; removed {
 			continue
@@ -218,7 +235,7 @@ func (e *Environment) Step() {
 		e.mols[id] = m
 	}
 
-	// 2.3 - insert new molecules
+	// 3.3 - insert new molecules
 	for _, nm := range newMolecules {
 		if nm.ID == "" {
 			nm.ID = MoleculeID(NewRandomID())
@@ -278,8 +295,9 @@ func (e *Environment) Stop() {
 	close(e.stopCh)
 }
 
-// sendNotification sends a notification if the reaction is configured to do so
-func (e *Environment) sendNotification(r Reaction, m Molecule, view EnvView, eff ReactionEffect, ctx ReactionContext, consumedMolecules map[MoleculeID]Molecule) {
+// sendNotificationWithContext sends a notification using the provided envID and notifierMgr
+// This version is safe to call without holding the environment lock
+func (e *Environment) sendNotificationWithContext(r Reaction, m Molecule, view EnvView, eff ReactionEffect, ctx ReactionContext, consumedMolecules map[MoleculeID]Molecule, envID EnvironmentID, notifierMgr *NotificationManager) {
 	// Get notification config from reaction if it's a ConfigReaction
 	notifyCfg := e.getNotificationConfig(r)
 	if notifyCfg == nil || !notifyCfg.Enabled {
@@ -303,7 +321,7 @@ func (e *Environment) sendNotification(r Reaction, m Molecule, view EnvView, eff
 
 	// Create notification event
 	event := CreateNotificationEventWithConsumed(
-		e.envID,
+		envID,
 		r,
 		m,
 		partners,
@@ -317,7 +335,7 @@ func (e *Environment) sendNotification(r Reaction, m Molecule, view EnvView, eff
 		notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_ = e.notifierMgr.Notify(notifyCtx, event, notifyCfg.Notifiers)
+		_ = notifierMgr.Notify(notifyCtx, event, notifyCfg.Notifiers)
 	}()
 }
 
