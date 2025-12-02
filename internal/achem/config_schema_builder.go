@@ -67,26 +67,10 @@ func (r *ConfigReaction) EffectiveRate(m Molecule, env EnvView) float64 {
 
 // findCatalysts finds catalyst molecules matching the catalyst config
 func findCatalysts(catalystCfg CatalystConfig, m Molecule, env EnvView) []Molecule {
-	// Get all molecules of the specified species
-	candidates := env.MoleculesBySpecies(SpeciesName(catalystCfg.Species))
-
-	var matches []Molecule
-	for _, candidate := range candidates {
-		// Catalysts can be the same molecule or different molecules
-		// (unlike partners, catalysts don't exclude the molecule itself)
-
-		// Check where conditions
-		matchesWhere := true
-		// Check where conditions using shared helper
-		if !matchWhere(catalystCfg.Where, candidate, m) {
-			matchesWhere = false
-		}
-
-		if matchesWhere {
-			matches = append(matches, candidate)
-		}
-	}
-
+	// Get all molecules of the specified species that match where conditions
+	// Catalysts can be the same molecule or different molecules
+	// (unlike partners, catalysts don't exclude the molecule itself)
+	matches := filterBySpeciesAndWhere(env, SpeciesName(catalystCfg.Species), catalystCfg.Where, m)
 	return matches
 }
 
@@ -245,19 +229,13 @@ func evaluateIfCondition(cond *IfConditionConfig, m Molecule, env EnvView) bool 
 
 // evaluateCountMolecules evaluates a count_molecules aggregation
 func evaluateCountMolecules(cfg *CountMoleculesConfig, m Molecule, env EnvView) bool {
-	// Get all molecules of the specified species
-	candidates := env.MoleculesBySpecies(SpeciesName(cfg.Species))
+	// Get all molecules of the specified species that match where conditions
+	candidates := filterBySpeciesAndWhere(env, SpeciesName(cfg.Species), cfg.Where, m)
 
-	// Filter by where conditions
+	// Filter out the molecule itself
 	var matches []Molecule
 	for _, candidate := range candidates {
-		// Skip the molecule itself
-		if candidate.ID == m.ID {
-			continue
-		}
-
-		// Check where conditions using shared helper
-		if matchWhere(cfg.Where, candidate, m) {
+		if candidate.ID != m.ID {
 			matches = append(matches, candidate)
 		}
 	}
@@ -278,18 +256,13 @@ func evaluateCountMolecules(cfg *CountMoleculesConfig, m Molecule, env EnvView) 
 
 // findPartners finds partner molecules matching the partner config
 func findPartners(partnerCfg PartnerConfig, m Molecule, env EnvView) []Molecule {
-	// Get all molecules of the specified species
-	candidates := env.MoleculesBySpecies(SpeciesName(partnerCfg.Species))
+	// Get all molecules of the specified species that match where conditions
+	candidates := filterBySpeciesAndWhere(env, SpeciesName(partnerCfg.Species), partnerCfg.Where, m)
 
+	// Filter out the molecule itself
 	var matches []Molecule
 	for _, candidate := range candidates {
-		// Skip the molecule itself
-		if candidate.ID == m.ID {
-			continue
-		}
-
-		// Check where conditions using shared helper
-		if matchWhere(partnerCfg.Where, candidate, m) {
+		if candidate.ID != m.ID {
 			matches = append(matches, candidate)
 		}
 	}

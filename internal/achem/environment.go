@@ -56,6 +56,9 @@ func (e *Environment) GetNotificationManager() *NotificationManager {
 type envView struct {
 	molecules []Molecule
 	bySpecies map[SpeciesName][]Molecule
+
+	// Optional: per-tick index to speed up simple equality where filters
+	bySpeciesFieldValue map[SpeciesName]map[string]map[string][]Molecule
 }
 
 func (v envView) MoleculesBySpecies(species SpeciesName) []Molecule {
@@ -137,6 +140,30 @@ func (e *Environment) Step() {
 		bySpecies[m.Species] = append(bySpecies[m.Species], m)
 	}
 
+	// build per-tick field index to speed up simple equality where filters
+	bySpeciesFieldValue := make(map[SpeciesName]map[string]map[string][]Molecule)
+	for _, m := range snapshot {
+		if len(m.Payload) == 0 {
+			continue
+		}
+
+		species := m.Species
+		if _, ok := bySpeciesFieldValue[species]; !ok {
+			bySpeciesFieldValue[species] = make(map[string]map[string][]Molecule)
+		}
+
+		for field, value := range m.Payload {
+			fieldMap := bySpeciesFieldValue[species][field]
+			if fieldMap == nil {
+				fieldMap = make(map[string][]Molecule)
+				bySpeciesFieldValue[species][field] = fieldMap
+			}
+
+			key := indexKeyFromValue(value)
+			fieldMap[key] = append(fieldMap[key], m)
+		}
+	}
+
 	// build an ID→Molecule map for convenient lookups during the compute phase
 	snapshotByID := make(map[MoleculeID]Molecule, len(snapshot))
 	for _, m := range snapshot {
@@ -144,8 +171,9 @@ func (e *Environment) Step() {
 	}
 
 	view := envView{
-		molecules: snapshot,
-		bySpecies: bySpecies,
+		molecules:            snapshot,
+		bySpecies:            bySpecies,
+		bySpeciesFieldValue:  bySpeciesFieldValue,
 	}
 
 	ctx := ReactionContext{
@@ -367,18 +395,13 @@ func (e *Environment) findPartnersForNotification(r Reaction, m Molecule, view E
 // findPartnersForReaction is a wrapper to access the private findPartners function
 // We need to make findPartners accessible or create a public wrapper
 func findPartnersForReaction(partnerCfg PartnerConfig, m Molecule, env EnvView) []Molecule {
-	// Get all molecules of the specified species
-	candidates := env.MoleculesBySpecies(SpeciesName(partnerCfg.Species))
+	// Get all molecules of the specified species that match where conditions
+	candidates := filterBySpeciesAndWhere(env, SpeciesName(partnerCfg.Species), partnerCfg.Where, m)
 
+	// Filter out the molecule itself
 	var matches []Molecule
 	for _, candidate := range candidates {
-		// Skip the molecule itself
-		if candidate.ID == m.ID {
-			continue
-		}
-
-		// Check where conditions using shared helper
-		if matchWhere(partnerCfg.Where, candidate, m) {
+		if candidate.ID != m.ID {
 			matches = append(matches, candidate)
 		}
 	}

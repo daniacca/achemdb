@@ -1,5 +1,14 @@
 package achem
 
+import "fmt"
+
+// indexKeyFromValue converts a value to a string key for indexing.
+// This is a simple approach; we accept that different types with the same
+// string representation might collide (it's an optimization, not a strict semantic guarantee).
+func indexKeyFromValue(v any) string {
+	return fmt.Sprintf("%v", v)
+}
+
 // resolveValueRef resolves $m.* references into values from the origin molecule.
 // It supports:
 //   - $m.energy
@@ -49,5 +58,47 @@ func matchWhere(where WhereConfig, candidate Molecule, origin Molecule) bool {
 		}
 	}
 	return true
+}
+
+// filterBySpeciesAndWhere returns molecules of a given species that match the given where,
+// using indexes when possible, and falling back to a linear scan otherwise.
+func filterBySpeciesAndWhere(env EnvView, species SpeciesName, where WhereConfig, origin Molecule) []Molecule {
+	// If where is empty, just return by species
+	if len(where) == 0 {
+		return env.MoleculesBySpecies(species)
+	}
+
+	// Try to use index only for the simple case:
+	// - underlying env is our concrete envView
+	// - where has exactly one field
+	if v, ok := env.(envView); ok && v.bySpeciesFieldValue != nil && len(where) == 1 {
+		for field, cond := range where {
+			// resolve the comparison value (may involve $m.*)
+			targetValue := resolveValueRef(cond.Eq, origin)
+			key := indexKeyFromValue(targetValue)
+
+			if fieldMap, ok := v.bySpeciesFieldValue[species]; ok {
+				if mols, ok := fieldMap[field]; ok {
+					if indexed, ok := mols[key]; ok {
+						// Return a copy to avoid external modification
+						out := make([]Molecule, len(indexed))
+						copy(out, indexed)
+						return out
+					}
+				}
+			}
+		}
+		// If we don't find indexed matches, we'll fall back to the generic path below
+	}
+
+	// Fallback: linear scan by species + where
+	candidates := env.MoleculesBySpecies(species)
+	out := make([]Molecule, 0, len(candidates))
+	for _, candidate := range candidates {
+		if matchWhere(where, candidate, origin) {
+			out = append(out, candidate)
+		}
+	}
+	return out
 }
 
