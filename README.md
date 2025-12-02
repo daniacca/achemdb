@@ -124,17 +124,6 @@ Isolated containers for molecules and reactions. Each environment has its own sc
 
 ---
 
-## Documentation
-
-- **[Overview](./docs/overview.md)** – High-level architecture, use cases, and design philosophy
-- **[Core Concepts](./docs/concepts.md)** – Deep dive into molecules, reactions, environments, and notifications
-- **[DSL Reference](./docs/dsl.md)** – Complete JSON schema and reaction syntax
-- **[HTTP API](./docs/http-api.md)** – All endpoints, request/response formats, and examples
-- **[Notifications](./docs/notifications.md)** – Notification system, event format, and notifier configuration
-- **[Persistence](./docs/persistence.md)** – Design for snapshots and persistence (planned)
-
----
-
 ## Usage as Go Package
 
 AchemDB can also be used as a Go library:
@@ -207,3 +196,18 @@ go install github.com/daniacca/achemdb/cmd/achemdb-server@latest
 cd cmd/demo
 go run .
 ```
+
+---
+
+## Documentation
+
+- **[Overview](./docs/overview.md)** – High-level architecture, use cases, and design philosophy
+- **[Core Concepts](./docs/concepts.md)** – Deep dive into molecules, reactions, environments, and notifications
+- **[DSL Reference](./docs/dsl.md)** – Complete JSON schema and reaction syntax
+- **[HTTP API](./docs/http-api.md)** – All endpoints, request/response formats, and examples
+- **[Notifications](./docs/notifications.md)** – Notification system, event format, and notifier configuration
+- **[Persistence](./docs/persistence.md)** – Design for snapshots and persistence (planned)
+
+---
+
+Special thanks to [Francesco Cacciante](./ACKNOWLEDGMENTS.md) and his book for inspiring this works.
