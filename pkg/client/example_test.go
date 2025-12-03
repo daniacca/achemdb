@@ -76,3 +76,27 @@ func ExampleReactionBuilder_Notify() {
 	_ = schema
 }
 
+func ExampleNotificationBuilder_callbacks() {
+	// Example showing how to enable notifications without notifiers
+	// This is useful when using Achem as a Go library with callbacks
+	schema := client.NewSchema("callback-demo").
+		Species("Input", "Input species", nil).
+		Species("Output", "Output species", nil).
+		Reaction(client.NewReaction("transform").
+			Input("Input").
+			Rate(1.0).
+			Effect(
+				client.Consume(),
+				client.Create("Output").
+					Payload("message", "Transformed"),
+			).
+			// Enable notifications without notifiers - callbacks will be called
+			Notify(client.NewNotification().
+				Enabled(true),
+				// No Notifiers() call - empty notifiers list is valid for callbacks
+			),
+		)
+
+	_ = schema
+}
+

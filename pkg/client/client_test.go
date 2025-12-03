@@ -333,3 +333,97 @@ func TestBuildSchemaFromClientConfig(t *testing.T) {
 	}
 }
 
+func TestNotificationBuilder(t *testing.T) {
+	// Test with notifiers
+	notify1 := NewNotification().
+		Enabled(true).
+		Notifiers("webhook-1", "websocket-1")
+
+	cfg1 := notify1.Build()
+	if !cfg1.Enabled {
+		t.Error("Expected notifications to be enabled")
+	}
+	if len(cfg1.Notifiers) != 2 {
+		t.Errorf("Expected 2 notifiers, got %d", len(cfg1.Notifiers))
+	}
+	if cfg1.Notifiers[0] != "webhook-1" {
+		t.Errorf("Expected first notifier 'webhook-1', got '%s'", cfg1.Notifiers[0])
+	}
+
+	// Test with empty notifiers (for callbacks)
+	notify2 := NewNotification().
+		Enabled(true)
+		// No notifiers added - this is valid for callbacks
+
+	cfg2 := notify2.Build()
+	if !cfg2.Enabled {
+		t.Error("Expected notifications to be enabled")
+	}
+	if len(cfg2.Notifiers) != 0 {
+		t.Errorf("Expected 0 notifiers, got %d", len(cfg2.Notifiers))
+	}
+
+	// Test disabled
+	notify3 := NewNotification().
+		Enabled(false).
+		Notifiers("webhook-1")
+
+	cfg3 := notify3.Build()
+	if cfg3.Enabled {
+		t.Error("Expected notifications to be disabled")
+	}
+
+	// Test using Notifier (singular) method
+	notify4 := NewNotification().
+		Notifier("notifier-1").
+		Notifier("notifier-2")
+
+	cfg4 := notify4.Build()
+	if len(cfg4.Notifiers) != 2 {
+		t.Errorf("Expected 2 notifiers, got %d", len(cfg4.Notifiers))
+	}
+}
+
+func TestReactionBuilder_WithNotifications(t *testing.T) {
+	reaction := NewReaction("test_reaction").
+		Input("InputSpecies").
+		Rate(1.0).
+		Effect(Consume()).
+		Notify(NewNotification().
+			Enabled(true).
+			Notifiers("webhook-1"))
+
+	cfg := reaction.Build()
+	if cfg.Notify == nil {
+		t.Fatal("Expected notification config to be set")
+	}
+	if !cfg.Notify.Enabled {
+		t.Error("Expected notifications to be enabled")
+	}
+	if len(cfg.Notify.Notifiers) != 1 {
+		t.Errorf("Expected 1 notifier, got %d", len(cfg.Notify.Notifiers))
+	}
+}
+
+func TestReactionBuilder_WithNotifications_EmptyNotifiers(t *testing.T) {
+	// Test notifications with empty notifiers (for callbacks)
+	reaction := NewReaction("test_reaction").
+		Input("InputSpecies").
+		Rate(1.0).
+		Effect(Consume()).
+		Notify(NewNotification().
+			Enabled(true))
+		// No notifiers - valid for callbacks
+
+	cfg := reaction.Build()
+	if cfg.Notify == nil {
+		t.Fatal("Expected notification config to be set")
+	}
+	if !cfg.Notify.Enabled {
+		t.Error("Expected notifications to be enabled")
+	}
+	if len(cfg.Notify.Notifiers) != 0 {
+		t.Errorf("Expected 0 notifiers (for callbacks), got %d", len(cfg.Notify.Notifiers))
+	}
+}
+
