@@ -1,5 +1,10 @@
 # AchemDB
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+![CI](https://github.com/daniacca/achemdb/actions/workflows/ci.yml/badge.svg)
+![Github tag](https://img.shields.io/github/v/tag/daniacca/achemdb)
+![Docker Pulls](https://img.shields.io/docker/pulls/kaelisra/achemdb)
+
 <div align="center"><img src="./docs/img/achemdb_logo.png" width=250 height=250></div>
 
 **An artificial chemistry database** – transform data through reactive patterns instead of queries.
@@ -80,14 +85,23 @@ func main() {
 
 ### Server Installation
 
+#### From Source
+
 ```bash
 go install github.com/daniacca/achemdb/cmd/achemdb-server@latest
 ```
 
-Or run with Docker (_TO BE DONE_):
+#### Docker
 
 ```bash
-docker run -p 8080:8080 achemdb/achemdb-server
+docker run -p 8080:8080 daniacca/achemdb:latest
+```
+
+Or build from source:
+
+```bash
+docker build -t daniacca/achemdb:latest .
+docker run -p 8080:8080 daniacca/achemdb:latest
 ```
 
 ### 1. Start the server

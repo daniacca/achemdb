@@ -1,0 +1,48 @@
+# Build artifacts
+bin/
+coverage/
+*.out
+*.test
+
+# Demo application
+cmd/demo/
+
+# Documentation
+docs/
+
+# Scripts
+scripts/
+
+# Temporary files
+tmp/
+*.tmp
+*.log
+
+# Test caches
+.cache/
+*.cache
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Makefile and other build files (optional, but we'll keep them for now)
+# Makefile
+
+# Version file (optional, but might be useful)
+# VERSION
+
