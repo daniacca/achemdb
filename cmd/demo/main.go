@@ -2,11 +2,35 @@ package main
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
+	"math/rand/v2"
 
 	"github.com/daniacca/achemdb/internal/achem"
 )
 
+
 func main() {
+	fmt.Println("=== Achem Demo: Security Alerts System ===")
+	fmt.Println()
+
+	// Run the main security alerts demo with manual tick
+	runSecurityAlertsDemo()
+
+	fmt.Println()
+	fmt.Println("=== Achem Demo: Callback Feature ===")
+	fmt.Println()
+
+	// Run the callback example
+	ExampleCallbackDemo()
+}
+
+func randRange(min, max int) int {
+    return rand.IntN(max-min) + min
+}
+
+func runSecurityAlertsDemo() {
 	schema := achem.NewSchema("security-alerts").WithSpecies(
 		achem.Species{
 			Name:        "Event",
@@ -27,15 +51,16 @@ func main() {
 	)
 
 	env := achem.NewEnvironment(schema)
+	env.SetEnvironmentID(achem.EnvironmentID("demo-env"))
 
-	// Un po' di eventi falliti dallo stesso IP
-	for i := 0; i < 5; i++ {
+	for range randRange(5, 100) {
 		env.Insert(achem.NewMolecule("Event", map[string]any{
 			"type": "login_failed",
 			"ip":   "1.2.3.4",
 		}, 0))
 	}
 
+	// Run 100 steps manually
 	for range 100 {
 		env.Step()
 	}
@@ -52,7 +77,106 @@ func main() {
 		}
 	}
 
-	fmt.Println("Events:", events)
-	fmt.Println("Suspicions:", suspicions)
-	fmt.Println("Alerts:", alerts)
+	fmt.Println("Environment State:")
+	fmt.Println("  Events:", events)
+	fmt.Println("  Suspicions:", suspicions)
+	fmt.Println("  Alerts:", alerts)
+}
+
+// ExampleCallbackDemo demonstrates how to use callbacks with Achem
+// This example shows how callbacks work when reactions have notifications enabled
+func ExampleCallbackDemo() {
+	// Create a schema with a reaction that has notifications enabled
+	cfg := achem.SchemaConfig{
+		Name: "callback-demo",
+		Species: []achem.SpeciesConfig{
+			{Name: "Input"},
+			{Name: "Output"},
+		},
+		Reactions: []achem.ReactionConfig{
+			{
+				ID:   "transform",
+				Name: "Transform Input to Output",
+				Input: achem.InputConfig{
+					Species: "Input",
+				},
+				Rate: 1.0, // Always fire
+				Effects: []achem.EffectConfig{
+					{Consume: true},
+					{
+						Create: &achem.CreateEffectConfig{
+							Species: "Output",
+						},
+					},
+				},
+				// Enable notifications - then callbacks will be called
+				Notify: &achem.NotificationConfig{
+					Enabled:   true,
+				},
+			},
+		},
+	}
+
+	schema, err := achem.BuildSchemaFromConfig(cfg)
+	if err != nil {
+		fmt.Printf("Error building schema: %v\n", err)
+		return
+	}
+
+	env := achem.NewEnvironment(schema)
+	env.SetEnvironmentID(achem.EnvironmentID("callback-demo-env"))
+
+	// Register a callback to receive notification events
+	// This is useful when using Achem as a Go package within your application
+	var receivedEvents []achem.NotificationEvent
+	var mu sync.Mutex
+
+	callbackID := "my-callback"
+	env.RegisterCallback(callbackID, func(event achem.NotificationEvent) {
+		mu.Lock()
+		receivedEvents = append(receivedEvents, event)
+		mu.Unlock()
+
+		fmt.Printf("  [Callback] Reaction '%s' (ID: %s) fired:\n",
+			event.ReactionName, event.ReactionID)
+		fmt.Printf("    - Environment: %s\n", event.EnvironmentID)
+		fmt.Printf("    - Env Time: %d\n", event.EnvTime)
+		fmt.Printf("    - Created %d molecule(s)\n", len(event.CreatedMolecules))
+		fmt.Printf("    - Consumed %d molecule(s)\n", len(event.ConsumedMolecules))
+	})
+
+	// Insert some input molecules
+	fmt.Println("Inserting random input molecules...")
+	for i := range randRange(5, 50) {
+		env.Insert(achem.NewMolecule("Input", map[string]any{
+			"value": i,
+		}, 0))
+	}
+
+	fmt.Println("Running environment steps...")
+	
+	// Run the environment with a 100ms interval for each step to occur
+	env.Run(100 * time.Millisecond)
+
+	// Wait for 1 second for async notifications to be processed
+	time.Sleep(1 * time.Second)
+
+	// Stop the environment
+	env.Stop()
+
+	// Check results
+	mu.Lock()
+	eventCount := len(receivedEvents)
+	mu.Unlock()
+
+	fmt.Printf("\nCallback Statistics:\n")
+	fmt.Printf("  Callback ID: %s\n", callbackID)
+	fmt.Printf("  Events received: %d\n", eventCount)
+
+	molecules := env.AllMolecules()
+	fmt.Printf("  Environment contains %d molecule(s)\n", len(molecules))
+
+	// Clean up: unregister callback when done
+	env.UnregisterCallback(callbackID)
+	fmt.Println("  Callback unregistered.")
 }

@@ -60,6 +60,7 @@ type notificationJob struct {
 type NotificationManager struct {
 	mu        sync.RWMutex
 	notifiers map[string]Notifier
+	callbacks map[string]func(NotificationEvent)
 	jobs      chan notificationJob
 	closed    bool
 	wg        sync.WaitGroup
@@ -71,6 +72,7 @@ func NewNotificationManager() *NotificationManager {
 		notifiers: make(map[string]Notifier),
 		jobs:      make(chan notificationJob, 1024),
 		closed:    false,
+		callbacks: make(map[string]func(NotificationEvent)),
 	}
 	mgr.startWorkers(1)
 	return mgr
@@ -96,6 +98,27 @@ func (nm *NotificationManager) RegisterNotifier(notifier Notifier) error {
 	
 	nm.notifiers[id] = notifier
 	return nil
+}
+
+// RegisterCallback registers a callback function for a given ID, used within the go lang runtime.
+func (nm *NotificationManager) RegisterCallback(id string, callback func(NotificationEvent)) {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+	nm.callbacks[id] = callback
+}
+
+// UnregisterCallback unregisters a callback function for a given ID, used within the go lang runtime.
+func (nm *NotificationManager) UnregisterCallback(id string) {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+	delete(nm.callbacks, id)
+}
+
+// hasCallbacks checks if there are any registered callbacks
+func (nm *NotificationManager) hasCallbacks() bool {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+	return len(nm.callbacks) > 0
 }
 
 // UnregisterNotifier removes a notifier from the manager
@@ -140,14 +163,17 @@ func (nm *NotificationManager) ListNotifiers() []string {
 
 // Enqueue enqueues a notification event to be processed asynchronously by worker goroutines.
 // This method is non-blocking and will drop notifications if the queue is full.
+// Note: Even if notifierIDs is empty, the event will still be enqueued to allow callbacks to be called.
 func (nm *NotificationManager) Enqueue(event NotificationEvent, notifierIDs []string) {
-	if len(notifierIDs) == 0 {
-		return
-	}
-	
 	nm.mu.RLock()
 	closed := nm.closed
+	hasCallbacks := len(nm.callbacks) > 0
 	nm.mu.RUnlock()
+	
+	// If there are no notifiers and no callbacks, skip enqueuing
+	if len(notifierIDs) == 0 && !hasCallbacks {
+		return
+	}
 	
 	if closed {
 		return
@@ -186,6 +212,13 @@ func (nm *NotificationManager) dispatchJob(job notificationJob) {
 	for _, id := range job.NotifierIDs {
 		nm.notifyWithRetry(ctx, id, job.Event)
 	}
+
+	// After all external notifications are dispatched, call any registered callbacks
+	nm.mu.RLock()
+	for _, callback := range nm.callbacks {
+		callback(job.Event)
+	}
+	nm.mu.RUnlock()
 }
 
 // notifyWithRetry attempts to send a notification with exponential backoff retry

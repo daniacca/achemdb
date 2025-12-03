@@ -430,6 +430,218 @@ func TestNotificationEvent_JSON(t *testing.T) {
 	}
 }
 
+func TestNotificationManager_RegisterCallback(t *testing.T) {
+	nm := NewNotificationManager()
+	defer nm.Close()
+
+	// Test registering a callback
+	var receivedEvent NotificationEvent
+	var mu sync.Mutex
+
+	callbackID := "test-callback"
+	nm.RegisterCallback(callbackID, func(event NotificationEvent) {
+		mu.Lock()
+		receivedEvent = event
+		mu.Unlock()
+	})
+
+	// Enqueue an event (callbacks are called for all events, even without notifiers)
+	event := NotificationEvent{
+		ReactionID:   "test-reaction",
+		ReactionName: "Test Reaction",
+		EnvTime:      42,
+	}
+	nm.Enqueue(event, []string{}) // Empty notifiers list, but callback should still be called
+
+	// Wait for async processing
+	time.Sleep(100 * time.Millisecond)
+
+	// Check if callback was called
+	mu.Lock()
+	wasCalled := receivedEvent.ReactionID != ""
+	mu.Unlock()
+
+	if !wasCalled {
+		t.Error("Expected callback to be called")
+	}
+	if receivedEvent.ReactionID != "test-reaction" {
+		t.Errorf("Expected ReactionID 'test-reaction', got '%s'", receivedEvent.ReactionID)
+	}
+	if receivedEvent.EnvTime != 42 {
+		t.Errorf("Expected EnvTime 42, got %d", receivedEvent.EnvTime)
+	}
+}
+
+func TestNotificationManager_RegisterCallback_Multiple(t *testing.T) {
+	nm := NewNotificationManager()
+	defer nm.Close()
+
+	var callback1Count, callback2Count int
+	var mu sync.Mutex
+
+	nm.RegisterCallback("callback-1", func(event NotificationEvent) {
+		mu.Lock()
+		callback1Count++
+		mu.Unlock()
+	})
+
+	nm.RegisterCallback("callback-2", func(event NotificationEvent) {
+		mu.Lock()
+		callback2Count++
+		mu.Unlock()
+	})
+
+	// Enqueue an event
+	event := NotificationEvent{ReactionID: "test-reaction"}
+	nm.Enqueue(event, []string{})
+
+	// Wait for async processing
+	time.Sleep(100 * time.Millisecond)
+
+	// Both callbacks should be called
+	mu.Lock()
+	c1 := callback1Count
+	c2 := callback2Count
+	mu.Unlock()
+
+	if c1 != 1 {
+		t.Errorf("Expected callback-1 to be called once, got %d", c1)
+	}
+	if c2 != 1 {
+		t.Errorf("Expected callback-2 to be called once, got %d", c2)
+	}
+}
+
+func TestNotificationManager_UnregisterCallback(t *testing.T) {
+	nm := NewNotificationManager()
+	defer nm.Close()
+
+	var callCount int
+	var mu sync.Mutex
+
+	callbackID := "test-callback"
+	nm.RegisterCallback(callbackID, func(event NotificationEvent) {
+		mu.Lock()
+		callCount++
+		mu.Unlock()
+	})
+
+	// Enqueue an event - callback should be called
+	event := NotificationEvent{ReactionID: "test-reaction"}
+	nm.Enqueue(event, []string{})
+	time.Sleep(100 * time.Millisecond)
+
+	mu.Lock()
+	beforeUnregister := callCount
+	mu.Unlock()
+
+	if beforeUnregister != 1 {
+		t.Errorf("Expected callback to be called once before unregister, got %d", beforeUnregister)
+	}
+
+	// Unregister the callback
+	nm.UnregisterCallback(callbackID)
+
+	// Enqueue another event - callback should NOT be called
+	nm.Enqueue(event, []string{})
+	time.Sleep(100 * time.Millisecond)
+
+	mu.Lock()
+	afterUnregister := callCount
+	mu.Unlock()
+
+	if afterUnregister != 1 {
+		t.Errorf("Expected callback count to remain 1 after unregister, got %d", afterUnregister)
+	}
+}
+
+func TestNotificationManager_Callback_WithNotifiers(t *testing.T) {
+	nm := NewNotificationManager()
+	defer nm.Close()
+
+	// Register a notifier
+	notifier := &mockNotifier{id: "test-notifier"}
+	nm.RegisterNotifier(notifier)
+
+	// Register a callback
+	var callbackCalled bool
+	var mu sync.Mutex
+	nm.RegisterCallback("test-callback", func(event NotificationEvent) {
+		mu.Lock()
+		callbackCalled = true
+		mu.Unlock()
+	})
+
+	// Enqueue an event with both notifier and callback
+	event := NotificationEvent{ReactionID: "test-reaction"}
+	nm.Enqueue(event, []string{"test-notifier"})
+
+	// Wait for async processing
+	time.Sleep(100 * time.Millisecond)
+
+	// Both notifier and callback should be called
+	if notifier.getNotifyCount() != 1 {
+		t.Errorf("Expected notifier to be called once, got %d", notifier.getNotifyCount())
+	}
+
+	mu.Lock()
+	cbCalled := callbackCalled
+	mu.Unlock()
+
+	if !cbCalled {
+		t.Error("Expected callback to be called")
+	}
+}
+
+func TestNotificationManager_Callback_Order(t *testing.T) {
+	nm := NewNotificationManager()
+	defer nm.Close()
+
+	// Verify that callbacks are called after notifiers
+	var executionOrder []string
+	var mu sync.Mutex
+
+	notifier := &mockNotifier{
+		id: "test-notifier",
+		notifyFunc: func(ctx context.Context, event NotificationEvent) error {
+			mu.Lock()
+			executionOrder = append(executionOrder, "notifier")
+			mu.Unlock()
+			return nil
+		},
+	}
+	nm.RegisterNotifier(notifier)
+
+	nm.RegisterCallback("test-callback", func(event NotificationEvent) {
+		mu.Lock()
+		executionOrder = append(executionOrder, "callback")
+		mu.Unlock()
+	})
+
+	// Enqueue an event
+	event := NotificationEvent{ReactionID: "test-reaction"}
+	nm.Enqueue(event, []string{"test-notifier"})
+
+	// Wait for async processing
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify order: notifier should be called before callback
+	mu.Lock()
+	order := make([]string, len(executionOrder))
+	copy(order, executionOrder)
+	mu.Unlock()
+
+	if len(order) != 2 {
+		t.Errorf("Expected 2 executions, got %d", len(order))
+	}
+	if order[0] != "notifier" {
+		t.Errorf("Expected notifier to be called first, got '%s'", order[0])
+	}
+	if order[1] != "callback" {
+		t.Errorf("Expected callback to be called second, got '%s'", order[1])
+	}
+}
+
 // testError is a simple error implementation for testing
 type testError struct {
 	msg string

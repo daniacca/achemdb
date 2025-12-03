@@ -120,6 +120,16 @@ func (e *Environment) AllMolecules() []Molecule {
 	return out
 }
 
+// RegisterCallback registers a callback function for a given ID, used within the go lang runtime.
+func (e *Environment) RegisterCallback(id string, callback func(NotificationEvent)) {
+	e.notifierMgr.RegisterCallback(id, callback)
+}
+
+// UnregisterCallback unregisters a callback function for a given ID, used within the go lang runtime.
+func (e *Environment) UnregisterCallback(id string) {
+	e.notifierMgr.UnregisterCallback(id)
+}
+
 // a single step inside the environment, it will apply all reactions to all the molecules
 // collected in the snapshot. 
 func (e *Environment) Step() {
@@ -331,7 +341,11 @@ func (e *Environment) sendNotificationWithContext(r Reaction, m Molecule, view E
 		return
 	}
 
-	if len(notifyCfg.Notifiers) == 0 {
+	// Check if there are callbacks registered - if so, we should enqueue even without notifiers
+	hasCallbacks := notifierMgr.hasCallbacks()
+	
+	// If there are no notifiers and no callbacks, skip enqueuing
+	if len(notifyCfg.Notifiers) == 0 && !hasCallbacks {
 		return
 	}
 
