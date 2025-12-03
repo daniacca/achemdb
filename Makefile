@@ -1,4 +1,4 @@
-.PHONY: help build run clean demo test test-coverage test-coverage-html test-verbose build-server run-server server
+.PHONY: help build run clean demo test test-coverage test-coverage-html test-verbose build-server run-server server version version-show version-set version-bump-major version-bump-minor version-bump-patch version-tag
 
 # Variables
 BINARY_NAME=demo
@@ -22,6 +22,14 @@ help:
 	@echo "  make test-coverage       - Run tests with coverage report"
 	@echo "  make test-coverage-html  - Generate HTML coverage report"
 	@echo "  make clean               - Remove build artifacts"
+	@echo ""
+	@echo "Version management:"
+	@echo "  make version             - Show current version"
+	@echo "  make version-set VERSION=x.y.z  - Set version to x.y.z"
+	@echo "  make version-bump-major  - Bump major version (x.0.0)"
+	@echo "  make version-bump-minor  - Bump minor version (x.y.0)"
+	@echo "  make version-bump-patch  - Bump patch version (x.y.z)"
+	@echo "  make version-tag         - Create git tag for current version"
 
 # Build the demo binary
 build:
@@ -87,4 +95,37 @@ clean:
 	@echo "Cleaning..."
 	@rm -rf $(BUILD_DIR) $(COVERAGE_DIR)
 	@echo "Clean complete"
+
+# Version management targets
+VERSION_SCRIPT=scripts/version.sh
+
+# Show current version
+version:
+	@$(VERSION_SCRIPT) show
+
+# Set version (requires VERSION variable)
+# Usage: make version-set VERSION=1.0.0
+version-set:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION variable is required"; \
+		echo "Usage: make version-set VERSION=x.y.z"; \
+		exit 1; \
+	fi
+	@$(VERSION_SCRIPT) set $(VERSION)
+
+# Bump major version
+version-bump-major:
+	@$(VERSION_SCRIPT) bump major
+
+# Bump minor version
+version-bump-minor:
+	@$(VERSION_SCRIPT) bump minor
+
+# Bump patch version
+version-bump-patch:
+	@$(VERSION_SCRIPT) bump patch
+
+# Create git tag for current version
+version-tag:
+	@$(VERSION_SCRIPT) tag
 

@@ -1,20 +1,23 @@
 package achem
 
+// SpeciesConfig represents a species configuration used in JSON schemas.
 type SpeciesConfig struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description,omitempty"`
 	Meta        map[string]any `json:"meta,omitempty"`
 }
 
+// EqCondition represents an equality condition for filtering molecules.
 // Where is a map of field -> { eq: value }
 type EqCondition struct {
 	Eq any `json:"eq"`
 }
 
-// Where config can at the moment only use Equality conditions
+// WhereConfig defines filtering conditions for molecules.
+// Currently only equality conditions are supported.
 type WhereConfig map[string]EqCondition
 
-// Comparison operators for conditions
+// ComparisonOp represents a comparison operator for field conditions.
 type ComparisonOp string
 
 const (

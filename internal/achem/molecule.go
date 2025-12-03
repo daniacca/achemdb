@@ -1,7 +1,10 @@
 package achem
 
+// MoleculeID is a unique identifier for a molecule.
 type MoleculeID string
 
+// Molecule represents a data entity in the artificial chemistry system.
+// Molecules have a species, payload data, energy, stability, and timestamps.
 type Molecule struct {
 	ID            MoleculeID
 	Species       SpeciesName
@@ -13,6 +16,10 @@ type Molecule struct {
 	LastTouchedAt int64
 }
 
+// NewMolecule creates a new molecule with the specified species and payload.
+// The molecule is assigned a random ID and initialized with default energy
+// and stability values of 1.0. The time parameter sets both CreatedAt and
+// LastTouchedAt timestamps.
 func NewMolecule(species SpeciesName, payload map[string]any, time int64) Molecule {
 	return Molecule{
 		ID:            MoleculeID(NewRandomID()),

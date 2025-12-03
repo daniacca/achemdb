@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// Environment represents an isolated artificial chemistry environment.
+// It contains molecules, reactions, and manages the simulation state.
+// Environments are thread-safe and can run continuously or step-by-step.
 type Environment struct {
 	mu                sync.RWMutex
 	schema            *Schema
@@ -25,6 +28,8 @@ type Environment struct {
 	snapshotMu        sync.Mutex
 }
 
+// NewEnvironment creates a new environment with the given schema.
+// The environment starts at time 0 with no molecules.
 func NewEnvironment(schema *Schema) *Environment {
 	return &Environment{
 		schema:            schema,

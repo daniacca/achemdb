@@ -12,14 +12,17 @@ import (
 	"github.com/daniacca/achemdb/internal/achem"
 )
 
-// SchemaBuilder provides a fluent API for building schemas
+// SchemaBuilder provides a fluent API for building schemas.
+// Use it to define species and reactions that describe how molecules
+// interact in an artificial chemistry system.
 type SchemaBuilder struct {
 	name      string
 	species   []achem.SpeciesConfig
 	reactions []*ReactionBuilder
 }
 
-// NewSchema creates a new schema builder
+// NewSchema creates a new schema builder with the given name.
+// The name identifies the schema and is used for organization purposes.
 func NewSchema(name string) *SchemaBuilder {
 	return &SchemaBuilder{
 		name:      name,
@@ -28,7 +31,9 @@ func NewSchema(name string) *SchemaBuilder {
 	}
 }
 
-// Species adds a species to the schema
+// Species adds a species definition to the schema.
+// A species represents a type of molecule in the system.
+// The meta parameter can be nil or contain additional metadata.
 func (sb *SchemaBuilder) Species(name, description string, meta map[string]any) *SchemaBuilder {
 	sb.species = append(sb.species, achem.SpeciesConfig{
 		Name:        name,
@@ -38,13 +43,15 @@ func (sb *SchemaBuilder) Species(name, description string, meta map[string]any) 
 	return sb
 }
 
-// Reaction adds a reaction to the schema
+// Reaction adds a reaction definition to the schema.
+// Reactions define how molecules transform when they interact.
 func (sb *SchemaBuilder) Reaction(rb *ReactionBuilder) *SchemaBuilder {
 	sb.reactions = append(sb.reactions, rb)
 	return sb
 }
 
-// Build converts the builder to a SchemaConfig
+// Build converts the builder to a SchemaConfig that can be used
+// with ApplySchema or other AChemDB APIs.
 func (sb *SchemaBuilder) Build() achem.SchemaConfig {
 	reactions := make([]achem.ReactionConfig, 0, len(sb.reactions))
 	for _, rb := range sb.reactions {
@@ -58,7 +65,9 @@ func (sb *SchemaBuilder) Build() achem.SchemaConfig {
 	}
 }
 
-// ReactionBuilder provides a fluent API for building reactions
+// ReactionBuilder provides a fluent API for building reaction configurations.
+// Reactions define how molecules of a specific species transform,
+// including input patterns, rates, catalysts, and effects.
 type ReactionBuilder struct {
 	id        string
 	name      string
@@ -69,7 +78,9 @@ type ReactionBuilder struct {
 	notify    *NotificationBuilder
 }
 
-// NewReaction creates a new reaction builder
+// NewReaction creates a new reaction builder with the given ID.
+// The ID must be unique within a schema. The name defaults to the ID
+// but can be overridden with the Name method.
 func NewReaction(id string) *ReactionBuilder {
 	return &ReactionBuilder{
 		id:        id,
@@ -80,13 +91,16 @@ func NewReaction(id string) *ReactionBuilder {
 	}
 }
 
-// Name sets the reaction name
+// Name sets the human-readable name for the reaction.
+// If not set, the name defaults to the reaction ID.
 func (rb *ReactionBuilder) Name(name string) *ReactionBuilder {
 	rb.name = name
 	return rb
 }
 
-// Input sets the input species and optional where conditions
+// Input sets the input species and optional where conditions for the reaction.
+// The whereEqs parameter allows chaining WhereEq calls to filter which
+// molecules of the species can trigger this reaction.
 func (rb *ReactionBuilder) Input(species string, whereEqs ...func(*InputBuilder)) *ReactionBuilder {
 	ib := NewInput(species)
 	for _, fn := range whereEqs {
@@ -96,20 +110,26 @@ func (rb *ReactionBuilder) Input(species string, whereEqs ...func(*InputBuilder)
 	return rb
 }
 
-// Rate sets the reaction rate
+// Rate sets the base reaction rate, a value between 0.0 and 1.0.
+// This represents the probability that the reaction will fire when
+// a matching molecule is available. The effective rate can be modified
+// by catalysts.
 func (rb *ReactionBuilder) Rate(rate float64) *ReactionBuilder {
 	rb.rate = rate
 	return rb
 }
 
-// Catalyst adds a catalyst to the reaction
+// Catalyst adds a catalyst configuration to the reaction.
+// Catalysts increase the reaction rate when matching molecules are present.
 func (rb *ReactionBuilder) Catalyst(cb *CatalystBuilder) *ReactionBuilder {
 	rb.catalysts = append(rb.catalysts, cb)
 	return rb
 }
 
-// Effect adds effects to the reaction
-// Accepts EffectBuilder, CreateEffectBuilder, UpdateEffectBuilder, or IfEffectBuilder
+// Effect adds one or more effects to the reaction.
+// Effects define what happens when the reaction fires, such as consuming
+// the input molecule, creating new molecules, or updating existing ones.
+// Accepts EffectBuilder, CreateEffectBuilder, UpdateEffectBuilder, or IfEffectBuilder.
 func (rb *ReactionBuilder) Effect(ebs ...interface{}) *ReactionBuilder {
 	for _, e := range ebs {
 		switch v := e.(type) {
@@ -126,13 +146,16 @@ func (rb *ReactionBuilder) Effect(ebs ...interface{}) *ReactionBuilder {
 	return rb
 }
 
-// Notify configures notifications for this reaction
+// Notify configures notification settings for this reaction.
+// When enabled, notifications are sent when the reaction fires,
+// allowing external systems to react to events in real-time.
 func (rb *ReactionBuilder) Notify(nb *NotificationBuilder) *ReactionBuilder {
 	rb.notify = nb
 	return rb
 }
 
-// Build converts the builder to a ReactionConfig
+// Build converts the builder to a ReactionConfig that can be used
+// in schema definitions.
 func (rb *ReactionBuilder) Build() achem.ReactionConfig {
 	input := achem.InputConfig{}
 	if rb.input != nil {
@@ -165,14 +188,16 @@ func (rb *ReactionBuilder) Build() achem.ReactionConfig {
 	return reactionCfg
 }
 
-// InputBuilder provides a fluent API for building input configurations
+// InputBuilder provides a fluent API for building input configurations.
+// Inputs define which molecules can trigger a reaction, including
+// species filtering, where conditions, and partner requirements.
 type InputBuilder struct {
 	species  string
 	where    achem.WhereConfig
 	partners []*PartnerBuilder
 }
 
-// NewInput creates a new input builder
+// NewInput creates a new input builder for the specified species.
 func NewInput(species string) *InputBuilder {
 	return &InputBuilder{
 		species:  species,
@@ -181,7 +206,9 @@ func NewInput(species string) *InputBuilder {
 	}
 }
 
-// WhereEq is a helper function that returns a function to add where conditions
+// WhereEq is a helper function that returns a function to add equality
+// conditions to an input builder. This is useful for chaining conditions
+// when calling ReactionBuilder.Input.
 func WhereEq(field string, value any) func(*InputBuilder) {
 	return func(ib *InputBuilder) {
 		if ib.where == nil {
@@ -191,7 +218,8 @@ func WhereEq(field string, value any) func(*InputBuilder) {
 	}
 }
 
-// WhereEq adds an equality condition to the where clause (method on InputBuilder)
+// WhereEq adds an equality condition to the where clause.
+// Only molecules with the specified field matching the value will match.
 func (ib *InputBuilder) WhereEq(field string, value any) *InputBuilder {
 	if ib.where == nil {
 		ib.where = make(achem.WhereConfig)
@@ -200,13 +228,14 @@ func (ib *InputBuilder) WhereEq(field string, value any) *InputBuilder {
 	return ib
 }
 
-// Partner adds a partner requirement
+// Partner adds a partner molecule requirement to the input.
+// Partners are additional molecules that must be present for the reaction to fire.
 func (ib *InputBuilder) Partner(pb *PartnerBuilder) *InputBuilder {
 	ib.partners = append(ib.partners, pb)
 	return ib
 }
 
-// Build converts the builder to an InputConfig
+// Build converts the builder to an InputConfig.
 func (ib *InputBuilder) Build() achem.InputConfig {
 	partners := make([]achem.PartnerConfig, 0, len(ib.partners))
 	for _, pb := range ib.partners {
@@ -220,14 +249,15 @@ func (ib *InputBuilder) Build() achem.InputConfig {
 	}
 }
 
-// PartnerBuilder provides a fluent API for building partner configurations
+// PartnerBuilder provides a fluent API for building partner molecule configurations.
+// Partners are additional molecules required for a reaction to fire.
 type PartnerBuilder struct {
 	species string
 	where   achem.WhereConfig
 	count   int
 }
 
-// NewPartner creates a new partner builder
+// NewPartner creates a new partner builder for the specified species.
 func NewPartner(species string) *PartnerBuilder {
 	return &PartnerBuilder{
 		species: species,
@@ -236,7 +266,7 @@ func NewPartner(species string) *PartnerBuilder {
 	}
 }
 
-// WhereEq adds an equality condition
+// WhereEq adds an equality condition to filter partner molecules.
 func (pb *PartnerBuilder) WhereEq(field string, value any) *PartnerBuilder {
 	if pb.where == nil {
 		pb.where = make(achem.WhereConfig)
@@ -245,13 +275,14 @@ func (pb *PartnerBuilder) WhereEq(field string, value any) *PartnerBuilder {
 	return pb
 }
 
-// Count sets the required count of partners
+// Count sets the required number of partner molecules.
+// The default is 1 if not specified.
 func (pb *PartnerBuilder) Count(count int) *PartnerBuilder {
 	pb.count = count
 	return pb
 }
 
-// Build converts the builder to a PartnerConfig
+// Build converts the builder to a PartnerConfig.
 func (pb *PartnerBuilder) Build() achem.PartnerConfig {
 	return achem.PartnerConfig{
 		Species: pb.species,
@@ -260,7 +291,9 @@ func (pb *PartnerBuilder) Build() achem.PartnerConfig {
 	}
 }
 
-// CatalystBuilder provides a fluent API for building catalyst configurations
+// CatalystBuilder provides a fluent API for building catalyst configurations.
+// Catalysts increase the reaction rate when matching molecules are present
+// in the environment.
 type CatalystBuilder struct {
 	species   string
 	where     achem.WhereConfig
@@ -268,7 +301,7 @@ type CatalystBuilder struct {
 	maxRate   *float64
 }
 
-// NewCatalyst creates a new catalyst builder
+// NewCatalyst creates a new catalyst builder for the specified species.
 func NewCatalyst(species string) *CatalystBuilder {
 	return &CatalystBuilder{
 		species:   species,
@@ -277,7 +310,7 @@ func NewCatalyst(species string) *CatalystBuilder {
 	}
 }
 
-// WhereEq adds an equality condition
+// WhereEq adds an equality condition to filter catalyst molecules.
 func (cb *CatalystBuilder) WhereEq(field string, value any) *CatalystBuilder {
 	if cb.where == nil {
 		cb.where = make(achem.WhereConfig)
@@ -286,19 +319,21 @@ func (cb *CatalystBuilder) WhereEq(field string, value any) *CatalystBuilder {
 	return cb
 }
 
-// RateBoost sets the rate boost amount
+// RateBoost sets the amount by which the reaction rate is increased
+// for each matching catalyst molecule. The default is 0.1.
 func (cb *CatalystBuilder) RateBoost(boost float64) *CatalystBuilder {
 	cb.rateBoost = boost
 	return cb
 }
 
-// MaxRate sets the maximum effective rate
+// MaxRate sets the maximum effective reaction rate, even when multiple
+// catalysts are present. If not set, the rate can exceed 1.0.
 func (cb *CatalystBuilder) MaxRate(max float64) *CatalystBuilder {
 	cb.maxRate = &max
 	return cb
 }
 
-// Build converts the builder to a CatalystConfig
+// Build converts the builder to a CatalystConfig.
 func (cb *CatalystBuilder) Build() achem.CatalystConfig {
 	return achem.CatalystConfig{
 		Species:   cb.species,
@@ -308,7 +343,9 @@ func (cb *CatalystBuilder) Build() achem.CatalystConfig {
 	}
 }
 
-// EffectBuilder provides a fluent API for building effects
+// EffectBuilder provides a fluent API for building reaction effects.
+// Effects define what happens when a reaction fires, such as consuming
+// molecules, creating new ones, or updating existing ones.
 type EffectBuilder struct {
 	consume bool
 	create  *CreateEffectBuilder
@@ -316,14 +353,16 @@ type EffectBuilder struct {
 	ifCond  *IfConditionBuilder
 }
 
-// Consume creates a consume effect
+// Consume creates an effect that consumes (removes) the input molecule
+// when the reaction fires.
 func Consume() *EffectBuilder {
 	return &EffectBuilder{
 		consume: true,
 	}
 }
 
-// Create creates a create effect builder
+// Create creates an effect builder for creating new molecules of the
+// specified species when the reaction fires.
 func Create(species string) *CreateEffectBuilder {
 	return &CreateEffectBuilder{
 		species: species,
@@ -331,12 +370,14 @@ func Create(species string) *CreateEffectBuilder {
 	}
 }
 
-// Update creates an update effect builder
+// Update creates an effect builder for updating existing molecules
+// when the reaction fires.
 func Update() *UpdateEffectBuilder {
 	return &UpdateEffectBuilder{}
 }
 
-// If creates a conditional effect builder
+// If creates a conditional effect builder that executes different effects
+// based on a condition. Use NewIfField or NewIfCount to create the condition.
 func If(icb *IfConditionBuilder) *IfEffectBuilder {
 	return &IfEffectBuilder{
 		ifCond: icb,
@@ -344,11 +385,13 @@ func If(icb *IfConditionBuilder) *IfEffectBuilder {
 }
 
 // IfEffectBuilder wraps an IfConditionBuilder to provide Then/Else methods
+// for conditional effect execution.
 type IfEffectBuilder struct {
 	ifCond *IfConditionBuilder
 }
 
-// Then adds effects to execute if condition is true
+// Then adds effects to execute if the condition is true.
+// Accepts EffectBuilder, CreateEffectBuilder, or UpdateEffectBuilder.
 func (ieb *IfEffectBuilder) Then(ebs ...interface{}) *IfEffectBuilder {
 	for _, e := range ebs {
 		switch v := e.(type) {
@@ -363,7 +406,8 @@ func (ieb *IfEffectBuilder) Then(ebs ...interface{}) *IfEffectBuilder {
 	return ieb
 }
 
-// Else adds effects to execute if condition is false
+// Else adds effects to execute if the condition is false.
+// Accepts EffectBuilder, CreateEffectBuilder, or UpdateEffectBuilder.
 func (ieb *IfEffectBuilder) Else(ebs ...interface{}) *IfEffectBuilder {
 	for _, e := range ebs {
 		switch v := e.(type) {
@@ -378,7 +422,7 @@ func (ieb *IfEffectBuilder) Else(ebs ...interface{}) *IfEffectBuilder {
 	return ieb
 }
 
-// Build converts the builder to an EffectConfig
+// Build converts the builder to an EffectConfig.
 func (eb *EffectBuilder) Build() achem.EffectConfig {
 	effect := achem.EffectConfig{
 		Consume: eb.consume,
@@ -407,7 +451,8 @@ func (eb *EffectBuilder) Build() achem.EffectConfig {
 	return effect
 }
 
-// CreateEffectBuilder provides a fluent API for building create effects
+// CreateEffectBuilder provides a fluent API for building create effects.
+// Create effects generate new molecules when a reaction fires.
 type CreateEffectBuilder struct {
 	species   string
 	payload   map[string]any
@@ -415,7 +460,9 @@ type CreateEffectBuilder struct {
 	stability *float64
 }
 
-// Payload adds a payload field
+// Payload adds a field to the payload of the created molecule.
+// The value can be a literal or a reference using Ref() to copy
+// values from the input molecule.
 func (ceb *CreateEffectBuilder) Payload(field string, value any) *CreateEffectBuilder {
 	if ceb.payload == nil {
 		ceb.payload = make(map[string]any)
@@ -424,19 +471,21 @@ func (ceb *CreateEffectBuilder) Payload(field string, value any) *CreateEffectBu
 	return ceb
 }
 
-// Energy sets the energy value
+// Energy sets the initial energy value for the created molecule.
+// If not set, the molecule will use the default energy value.
 func (ceb *CreateEffectBuilder) Energy(energy float64) *CreateEffectBuilder {
 	ceb.energy = &energy
 	return ceb
 }
 
-// Stability sets the stability value
+// Stability sets the initial stability value for the created molecule.
+// If not set, the molecule will use the default stability value.
 func (ceb *CreateEffectBuilder) Stability(stability float64) *CreateEffectBuilder {
 	ceb.stability = &stability
 	return ceb
 }
 
-// Build converts the builder to a CreateEffectConfig
+// Build converts the builder to a CreateEffectConfig.
 func (ceb *CreateEffectBuilder) Build() *achem.CreateEffectConfig {
 	return &achem.CreateEffectConfig{
 		Species:   ceb.species,
@@ -446,25 +495,28 @@ func (ceb *CreateEffectBuilder) Build() *achem.CreateEffectConfig {
 	}
 }
 
-// UpdateEffectBuilder provides a fluent API for building update effects
+// UpdateEffectBuilder provides a fluent API for building update effects.
+// Update effects modify existing molecules when a reaction fires.
 type UpdateEffectBuilder struct {
 	energyAdd *float64
 }
 
-// EnergyAdd sets the energy addition amount
+// EnergyAdd sets the amount to add to the molecule's energy.
+// The energy is modified in place when the reaction fires.
 func (ueb *UpdateEffectBuilder) EnergyAdd(amount float64) *UpdateEffectBuilder {
 	ueb.energyAdd = &amount
 	return ueb
 }
 
-// Build converts the builder to an UpdateEffectConfig
+// Build converts the builder to an UpdateEffectConfig.
 func (ueb *UpdateEffectBuilder) Build() *achem.UpdateEffectConfig {
 	return &achem.UpdateEffectConfig{
 		EnergyAdd: ueb.energyAdd,
 	}
 }
 
-// IfConditionBuilder provides a fluent API for building conditional effects
+// IfConditionBuilder provides a fluent API for building conditional effects.
+// Conditions can check molecule fields or count molecules in the environment.
 type IfConditionBuilder struct {
 	field          string
 	op             string
@@ -474,7 +526,8 @@ type IfConditionBuilder struct {
 	else_          []*EffectBuilder
 }
 
-// NewIfField creates a field-based condition
+// NewIfField creates a field-based condition that compares a molecule field
+// with a value. Supported operators: "eq", "ne", "gt", "gte", "lt", "lte".
 func NewIfField(field, op string, value any) *IfConditionBuilder {
 	return &IfConditionBuilder{
 		field: field,
@@ -485,7 +538,8 @@ func NewIfField(field, op string, value any) *IfConditionBuilder {
 	}
 }
 
-// NewIfCount creates a count_molecules condition
+// NewIfCount creates a count-based condition that checks the number of
+// molecules matching certain criteria in the environment.
 func NewIfCount(cmb *CountMoleculesBuilder) *IfConditionBuilder {
 	return &IfConditionBuilder{
 		countMolecules: cmb,
@@ -494,19 +548,19 @@ func NewIfCount(cmb *CountMoleculesBuilder) *IfConditionBuilder {
 	}
 }
 
-// Then adds effects to execute if condition is true
+// Then adds effects to execute if the condition is true.
 func (icb *IfConditionBuilder) Then(eb ...*EffectBuilder) *IfConditionBuilder {
 	icb.then = append(icb.then, eb...)
 	return icb
 }
 
-// Else adds effects to execute if condition is false
+// Else adds effects to execute if the condition is false.
 func (icb *IfConditionBuilder) Else(eb ...*EffectBuilder) *IfConditionBuilder {
 	icb.else_ = append(icb.else_, eb...)
 	return icb
 }
 
-// Build converts the builder to an IfConditionConfig
+// Build converts the builder to an IfConditionConfig.
 func (icb *IfConditionBuilder) Build() *achem.IfConditionConfig {
 	cond := &achem.IfConditionConfig{}
 
@@ -521,14 +575,16 @@ func (icb *IfConditionBuilder) Build() *achem.IfConditionConfig {
 	return cond
 }
 
-// CountMoleculesBuilder provides a fluent API for building count_molecules conditions
+// CountMoleculesBuilder provides a fluent API for building count_molecules conditions.
+// These conditions count molecules matching certain criteria and compare
+// the count with a threshold.
 type CountMoleculesBuilder struct {
 	species string
 	where   achem.WhereConfig
 	op      map[string]any
 }
 
-// NewCountMolecules creates a new count molecules builder
+// NewCountMolecules creates a new count molecules builder for the specified species.
 func NewCountMolecules(species string) *CountMoleculesBuilder {
 	return &CountMoleculesBuilder{
 		species: species,
@@ -537,7 +593,7 @@ func NewCountMolecules(species string) *CountMoleculesBuilder {
 	}
 }
 
-// WhereEq adds an equality condition
+// WhereEq adds an equality condition to filter which molecules are counted.
 func (cmb *CountMoleculesBuilder) WhereEq(field string, value any) *CountMoleculesBuilder {
 	if cmb.where == nil {
 		cmb.where = make(achem.WhereConfig)
@@ -546,7 +602,9 @@ func (cmb *CountMoleculesBuilder) WhereEq(field string, value any) *CountMolecul
 	return cmb
 }
 
-// Op sets the comparison operator and value
+// Op sets the comparison operator and threshold value for the count.
+// Supported operators: "eq", "ne", "gt", "gte", "lt", "lte".
+// Example: Op("gte", 3) means "count >= 3".
 func (cmb *CountMoleculesBuilder) Op(operator string, value any) *CountMoleculesBuilder {
 	if cmb.op == nil {
 		cmb.op = make(map[string]any)
@@ -555,7 +613,7 @@ func (cmb *CountMoleculesBuilder) Op(operator string, value any) *CountMolecules
 	return cmb
 }
 
-// Build converts the builder to a CountMoleculesConfig
+// Build converts the builder to a CountMoleculesConfig.
 func (cmb *CountMoleculesBuilder) Build() *achem.CountMoleculesConfig {
 	return &achem.CountMoleculesConfig{
 		Species: cmb.species,
@@ -564,8 +622,10 @@ func (cmb *CountMoleculesBuilder) Build() *achem.CountMoleculesConfig {
 	}
 }
 
-// Ref creates a reference to a molecule field
-// Accepts either "field" (becomes "$m.field") or "m.field" (becomes "$m.field")
+// Ref creates a reference to a molecule field that can be used in payload values.
+// The reference will be resolved to the actual value from the input molecule
+// when the reaction fires. Accepts either "field" (becomes "$m.field") or
+// "m.field" (becomes "$m.field").
 func Ref(field string) string {
 	if len(field) > 2 && field[:2] == "m." {
 		return "$" + field
@@ -573,7 +633,9 @@ func Ref(field string) string {
 	return "$m." + field
 }
 
-// ApplySchema sends the schema to the server
+// ApplySchema sends the schema configuration to an AChemDB server.
+// The baseURL is the server's base URL (e.g., "http://localhost:8080"),
+// and envID is the environment ID where the schema should be applied.
 func ApplySchema(ctx context.Context, baseURL, envID string, schema *SchemaBuilder) error {
 	cfg := schema.Build()
 
@@ -612,13 +674,16 @@ func ApplySchema(ctx context.Context, baseURL, envID string, schema *SchemaBuild
 	return nil
 }
 
-// NotificationBuilder provides a fluent API for building notification configurations
+// NotificationBuilder provides a fluent API for building notification configurations.
+// Notifications allow external systems to be notified when reactions fire,
+// either through webhooks, WebSocket, or callbacks.
 type NotificationBuilder struct {
 	enabled   bool
 	notifiers []string
 }
 
-// NewNotification creates a new notification builder
+// NewNotification creates a new notification builder with notifications
+// enabled by default.
 func NewNotification() *NotificationBuilder {
 	return &NotificationBuilder{
 		enabled:   true,
@@ -626,25 +691,26 @@ func NewNotification() *NotificationBuilder {
 	}
 }
 
-// Enabled sets whether notifications are enabled
+// Enabled sets whether notifications are enabled for this reaction.
 func (nb *NotificationBuilder) Enabled(enabled bool) *NotificationBuilder {
 	nb.enabled = enabled
 	return nb
 }
 
-// Notifier adds a notifier ID to the list
+// Notifier adds a notifier ID to the list of notifiers to use.
+// Notifiers must be registered with the server separately.
 func (nb *NotificationBuilder) Notifier(id string) *NotificationBuilder {
 	nb.notifiers = append(nb.notifiers, id)
 	return nb
 }
 
-// Notifiers adds multiple notifier IDs
+// Notifiers adds multiple notifier IDs to the list.
 func (nb *NotificationBuilder) Notifiers(ids ...string) *NotificationBuilder {
 	nb.notifiers = append(nb.notifiers, ids...)
 	return nb
 }
 
-// Build converts the builder to a NotificationConfig
+// Build converts the builder to a NotificationConfig.
 func (nb *NotificationBuilder) Build() *achem.NotificationConfig {
 	return &achem.NotificationConfig{
 		Enabled:   nb.enabled,

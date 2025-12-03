@@ -1,17 +1,22 @@
 package achem
 
+// ReactionContext provides context information to reactions when they are applied.
+// It includes the current environment time and a random number generator.
 type ReactionContext struct {
 	EnvTime int64
 	Random  func() float64
 }
 
+// MoleculeChange represents an update to an existing molecule.
+// If Updated is nil and the ID is in ConsumedIDs, the molecule is deleted.
 type MoleculeChange struct {
 	ID      MoleculeID
 	Updated *Molecule // if nil + present in ConsumedIDs => delete
 }
 
-// The effect of a reactiion could consume one or more molecules,
-// transform one or more molecules to other molecules, or create new molecules
+// ReactionEffect describes the changes that occur when a reaction fires.
+// It can consume molecules, update existing ones, create new ones, and
+// perform additional operations.
 type ReactionEffect struct {
 	ConsumedIDs    []MoleculeID 		// molecules to remove
 	Changes        []MoleculeChange		// molecules to update
@@ -19,11 +24,15 @@ type ReactionEffect struct {
 	AdditionalOps  []Operation  		// extendable in the future (e.g. log, metrics)
 }
 
-// Actually a placeholder for future operations
+// Operation is a placeholder for future extensible operations
+// that reactions can perform (e.g., logging, metrics).
 type Operation struct {
 	// To be done...
 }
 
+// EnvView provides a read-only view of the environment for reactions.
+// Reactions use this interface to query molecules without modifying
+// the environment state.
 type EnvView interface {
 	// Simple query: returns all molecules of a species
 	MoleculesBySpecies(species SpeciesName) []Molecule
@@ -32,6 +41,9 @@ type EnvView interface {
 	Find(filter func(Molecule) bool) []Molecule
 }
 
+// Reaction defines the interface that all reactions must implement.
+// Reactions determine which molecules they match, their firing rate,
+// and what effects they produce when they fire.
 type Reaction interface {
 	ID() string
 	Name() string

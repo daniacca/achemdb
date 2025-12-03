@@ -19,9 +19,66 @@ Perfect for: security alert systems, anomaly detection, event correlation, compl
 
 ---
 
+## Installation
+
+### Go Package
+
+```bash
+go get github.com/daniacca/achemdb
+```
+
+### Server Binary
+
+```bash
+go install github.com/daniacca/achemdb/cmd/achemdb-server@latest
+```
+
+---
+
 ## Quickstart
 
-### Installation
+### Minimal Example
+
+Here's a simple example using the Go client:
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/daniacca/achemdb/pkg/client"
+)
+
+func main() {
+	// Create a schema with species and reactions
+	schema := client.NewSchema("security-alerts").
+		Species("Event", "Raw events", nil).
+		Species("Suspicion", "Suspicious entities", nil).
+		Reaction(client.NewReaction("login_failure_to_suspicion").
+			Input("Event", client.WhereEq("type", "login_failed")).
+			Rate(1.0).
+			Effect(
+				client.Consume(),
+				client.Create("Suspicion").
+					Payload("ip", client.Ref("m.ip")).
+					Energy(1.0),
+			),
+		)
+
+	// Apply schema to server
+	ctx := context.Background()
+	if err := client.ApplySchema(ctx, "http://localhost:8080", "production", schema); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Schema applied successfully!")
+}
+```
+
+### Server Installation
 
 ```bash
 go install github.com/daniacca/achemdb/cmd/achemdb-server@latest
@@ -173,22 +230,6 @@ See the [DSL Reference](./docs/dsl.md) for the equivalent JSON structure.
 ## Requirements
 
 - Go 1.25.4 or later
-
----
-
-## Installation
-
-### Go Package
-
-```bash
-go get github.com/daniacca/achemdb
-```
-
-### Server Binary
-
-```bash
-go install github.com/daniacca/achemdb/cmd/achemdb-server@latest
-```
 
 ### Run Demo
 
