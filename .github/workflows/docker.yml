@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - "v*.*.*"
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   build-and-push:
@@ -13,9 +13,12 @@ jobs:
     permissions:
       contents: read
       packages: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -29,12 +32,23 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Extract version from tag
+      - name: Resolve version
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            # push tag: refs/tags/v0.1.0 → version=v0.1.0
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            # manual workflow dispatch: take the latest available tag
+            VERSION=$(git tag --sort=-v:refname | head -n 1)
+            if [[ -z "$VERSION" ]]; then
+              echo "No tags found in repository, cannot determine version" >&2
+              exit 1
+            fi
+          fi
+
+          echo "Using version tag: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -44,6 +58,6 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/achemdb:latest
-            ${{ secrets.DOCKER_USERNAME }}/achemdb:${{ steps.version.outputs.tag }}
+            ${{ secrets.DOCKER_USERNAME }}/achemdb:${{ steps.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
