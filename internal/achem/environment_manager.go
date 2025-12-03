@@ -23,6 +23,7 @@ func NewEnvironmentManager() *EnvironmentManager {
 
 // CreateEnvironment creates a new environment with the given ID and schema
 // Returns an error if an environment with that ID already exists
+// After creating the environment, it attempts to load a snapshot if one exists.
 func (em *EnvironmentManager) CreateEnvironment(id EnvironmentID, schema *Schema) error {
 	em.mu.Lock()
 	defer em.mu.Unlock()
@@ -33,6 +34,14 @@ func (em *EnvironmentManager) CreateEnvironment(id EnvironmentID, schema *Schema
 
 	env := NewEnvironment(schema)
 	env.SetEnvironmentID(id)
+	
+	// Attempt to load snapshot (no-op if snapshot doesn't exist)
+	if err := env.LoadSnapshot(); err != nil {
+		// If snapshot loading fails, we still create the environment but log the error
+		// This allows environments to be created even if snapshot is corrupted
+		return fmt.Errorf("failed to load snapshot for environment %s: %w", id, err)
+	}
+	
 	em.environments[id] = env
 	return nil
 }

@@ -1,6 +1,9 @@
 package achem
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -674,6 +677,582 @@ func TestEnvironment_Run_StepIsCalled(t *testing.T) {
 
 	if !called {
 		t.Error("Expected reaction to be called during Run()")
+	}
+}
+
+func TestEnvironment_SnapshotPath(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	tmpDir := t.TempDir()
+	env.SetSnapshotDir(tmpDir)
+
+	expectedPath := filepath.Join(tmpDir, "test-env.snapshot.json")
+	actualPath := env.SnapshotPath()
+
+	if actualPath != expectedPath {
+		t.Errorf("Expected snapshot path %s, got %s", expectedPath, actualPath)
+	}
+}
+
+func TestEnvironment_CreateSnapshot(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	// Insert some molecules
+	m1 := NewMolecule("Species1", map[string]any{"key": "value1"}, 0)
+	m2 := NewMolecule("Species2", map[string]any{"key": "value2"}, 0)
+	env.Insert(m1)
+	env.Insert(m2)
+
+	// Manually set time for testing
+	env.mu.Lock()
+	env.time = 42
+	env.mu.Unlock()
+
+	// Create snapshot
+	snapshot, err := env.createSnapshot()
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Verify snapshot content
+	if snapshot.EnvironmentID != "test-env" {
+		t.Errorf("Expected EnvironmentID 'test-env', got '%s'", snapshot.EnvironmentID)
+	}
+	if snapshot.Time != 42 {
+		t.Errorf("Expected Time 42, got %d", snapshot.Time)
+	}
+	if len(snapshot.Molecules) != 2 {
+		t.Fatalf("Expected 2 molecules, got %d", len(snapshot.Molecules))
+	}
+
+	// Verify molecules are present
+	moleculeIDs := make(map[MoleculeID]bool)
+	for _, m := range snapshot.Molecules {
+		moleculeIDs[m.ID] = true
+	}
+	if !moleculeIDs[m1.ID] || !moleculeIDs[m2.ID] {
+		t.Error("Expected both molecules to be in snapshot")
+	}
+}
+
+func TestEnvironment_SaveSnapshot_CreatesFile(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	tmpDir := t.TempDir()
+	env.SetSnapshotDir(tmpDir)
+
+	// Insert a molecule
+	m := NewMolecule("TestSpecies", map[string]any{"test": "data"}, 0)
+	env.Insert(m)
+
+	// Manually set time
+	env.mu.Lock()
+	env.time = 100
+	env.mu.Unlock()
+
+	// Save snapshot
+	err := env.SaveSnapshot()
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Verify file exists
+	expectedPath := filepath.Join(tmpDir, "test-env.snapshot.json")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Fatalf("Expected snapshot file to exist at %s", expectedPath)
+	}
+
+	// Verify temp file doesn't exist
+	tempPath := expectedPath + ".tmp"
+	if _, err := os.Stat(tempPath); !os.IsNotExist(err) {
+		t.Errorf("Expected temp file to be removed, but it exists at %s", tempPath)
+	}
+}
+
+func TestEnvironment_SaveSnapshot_MatchesExpectedContent(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	tmpDir := t.TempDir()
+	env.SetSnapshotDir(tmpDir)
+
+	// Insert molecules
+	m1 := NewMolecule("Species1", map[string]any{"key1": "value1"}, 0)
+	m2 := NewMolecule("Species2", map[string]any{"key2": 42}, 0)
+	env.Insert(m1)
+	env.Insert(m2)
+
+	// Manually set time
+	env.mu.Lock()
+	env.time = 123
+	env.mu.Unlock()
+
+	// Save snapshot
+	err := env.SaveSnapshot()
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Read and decode snapshot
+	path := filepath.Join(tmpDir, "test-env.snapshot.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("Failed to read snapshot file: %v", err)
+	}
+
+	var snapshot Snapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		t.Fatalf("Failed to decode snapshot JSON: %v", err)
+	}
+
+	// Verify snapshot content
+	if snapshot.EnvironmentID != "test-env" {
+		t.Errorf("Expected EnvironmentID 'test-env', got '%s'", snapshot.EnvironmentID)
+	}
+	if snapshot.Time != 123 {
+		t.Errorf("Expected Time 123, got %d", snapshot.Time)
+	}
+	if len(snapshot.Molecules) != 2 {
+		t.Fatalf("Expected 2 molecules, got %d", len(snapshot.Molecules))
+	}
+
+	// Verify molecules match
+	moleculeMap := make(map[MoleculeID]Molecule)
+	for _, m := range snapshot.Molecules {
+		moleculeMap[m.ID] = m
+	}
+
+	if mol1, ok := moleculeMap[m1.ID]; !ok {
+		t.Error("Expected m1 to be in snapshot")
+	} else {
+		if mol1.Species != m1.Species {
+			t.Errorf("Expected m1 species '%s', got '%s'", m1.Species, mol1.Species)
+		}
+		if mol1.Payload["key1"] != "value1" {
+			t.Errorf("Expected m1 payload key1='value1', got '%v'", mol1.Payload["key1"])
+		}
+	}
+
+	if mol2, ok := moleculeMap[m2.ID]; !ok {
+		t.Error("Expected m2 to be in snapshot")
+	} else {
+		if mol2.Species != m2.Species {
+			t.Errorf("Expected m2 species '%s', got '%s'", m2.Species, mol2.Species)
+		}
+		// JSON unmarshals numbers as float64, so compare accordingly
+		if val, ok := mol2.Payload["key2"].(float64); !ok || val != 42 {
+			t.Errorf("Expected m2 payload key2=42, got '%v'", mol2.Payload["key2"])
+		}
+	}
+}
+
+func TestEnvironment_SaveSnapshot_AtomicWrite(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	tmpDir := t.TempDir()
+	env.SetSnapshotDir(tmpDir)
+
+	// Insert a molecule
+	m := NewMolecule("TestSpecies", map[string]any{"test": "data"}, 0)
+	env.Insert(m)
+
+	// Manually set time
+	env.mu.Lock()
+	env.time = 200
+	env.mu.Unlock()
+
+	// Save snapshot
+	err := env.SaveSnapshot()
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Verify temp file is removed (atomic write succeeded)
+	expectedPath := filepath.Join(tmpDir, "test-env.snapshot.json")
+	tempPath := expectedPath + ".tmp"
+	if _, err := os.Stat(tempPath); !os.IsNotExist(err) {
+		t.Errorf("Expected temp file to be removed after atomic write, but it exists at %s", tempPath)
+	}
+
+	// Verify final file exists and is valid
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Fatalf("Expected final snapshot file to exist at %s", expectedPath)
+	}
+
+	// Verify file is valid JSON
+	data, err := os.ReadFile(expectedPath)
+	if err != nil {
+		t.Fatalf("Failed to read snapshot file: %v", err)
+	}
+
+	var snapshot Snapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		t.Fatalf("Snapshot file is not valid JSON: %v", err)
+	}
+
+	if snapshot.Time != 200 {
+		t.Errorf("Expected snapshot time 200, got %d", snapshot.Time)
+	}
+}
+
+func TestEnvironment_Step_TriggersSnapshot(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	tmpDir := t.TempDir()
+	env.SetSnapshotDir(tmpDir)
+	env.SetSnapshotEveryNTicks(5) // Snapshot every 5 ticks
+
+	// Insert a molecule
+	m := NewMolecule("TestSpecies", map[string]any{"test": "data"}, 0)
+	env.Insert(m)
+
+	// Set time to 4, so next step will be 5 (which triggers snapshot)
+	env.mu.Lock()
+	env.time = 4
+	env.mu.Unlock()
+
+	// Step to time 5 (should trigger snapshot)
+	env.Step()
+
+	// Wait a bit for async snapshot to complete
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify snapshot file was created
+	expectedPath := filepath.Join(tmpDir, "test-env.snapshot.json")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Fatalf("Expected snapshot file to be created at time 5, but it doesn't exist")
+	}
+
+	// Verify snapshot content
+	data, err := os.ReadFile(expectedPath)
+	if err != nil {
+		t.Fatalf("Failed to read snapshot file: %v", err)
+	}
+
+	var snapshot Snapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		t.Fatalf("Failed to decode snapshot: %v", err)
+	}
+
+	if snapshot.Time != 5 {
+		t.Errorf("Expected snapshot time 5, got %d", snapshot.Time)
+	}
+}
+
+func TestEnvironment_SaveSnapshot_NoDirectory(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	// Set snapshot dir to empty (disabled)
+	env.SetSnapshotDir("")
+
+	// Insert a molecule
+	m := NewMolecule("TestSpecies", nil, 0)
+	env.Insert(m)
+
+	// Save snapshot should succeed but do nothing
+	err := env.SaveSnapshot()
+	if err != nil {
+		t.Errorf("Expected no error when snapshot dir is empty, got %v", err)
+	}
+}
+
+func TestEnvironment_LoadSnapshot_EmptyEnvironment(t *testing.T) {
+	// Create schema with TestSpecies
+	schema := NewSchema("test")
+	schema = schema.WithSpecies(Species{Name: "TestSpecies"})
+
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	tmpDir := t.TempDir()
+	env.SetSnapshotDir(tmpDir)
+
+	// Create a snapshot with some molecules
+	m1 := NewMolecule("TestSpecies", map[string]any{"key": "value"}, 0)
+	m2 := NewMolecule("TestSpecies", map[string]any{"key2": 42}, 0)
+	env.Insert(m1)
+	env.Insert(m2)
+
+	// Set time
+	env.mu.Lock()
+	env.time = 100
+	env.mu.Unlock()
+
+	// Save snapshot
+	if err := env.SaveSnapshot(); err != nil {
+		t.Fatalf("Failed to save snapshot: %v", err)
+	}
+
+	// Create a new empty environment
+	newEnv := NewEnvironment(schema)
+	newEnv.SetEnvironmentID("test-env")
+	newEnv.SetSnapshotDir(tmpDir)
+
+	// Load snapshot
+	if err := newEnv.LoadSnapshot(); err != nil {
+		t.Fatalf("Failed to load snapshot: %v", err)
+	}
+
+	// Verify environment was restored
+	if newEnv.time != 100 {
+		t.Errorf("Expected time 100, got %d", newEnv.time)
+	}
+
+	molecules := newEnv.AllMolecules()
+	if len(molecules) != 2 {
+		t.Fatalf("Expected 2 molecules, got %d", len(molecules))
+	}
+
+	// Verify molecules match
+	moleculeMap := make(map[MoleculeID]Molecule)
+	for _, m := range molecules {
+		moleculeMap[m.ID] = m
+	}
+
+	if _, ok := moleculeMap[m1.ID]; !ok {
+		t.Error("Expected m1 to be restored")
+	}
+	if _, ok := moleculeMap[m2.ID]; !ok {
+		t.Error("Expected m2 to be restored")
+	}
+}
+
+func TestEnvironment_LoadSnapshot_WithMolecules(t *testing.T) {
+	schema := NewSchema("test")
+	schema = schema.WithSpecies(Species{Name: "Species1"}, Species{Name: "Species2"})
+
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	tmpDir := t.TempDir()
+	env.SetSnapshotDir(tmpDir)
+
+	// Create molecules of different species
+	m1 := NewMolecule("Species1", map[string]any{"field1": "value1"}, 0)
+	m2 := NewMolecule("Species2", map[string]any{"field2": 123}, 0)
+	m3 := NewMolecule("Species1", map[string]any{"field3": true}, 0)
+
+	env.Insert(m1)
+	env.Insert(m2)
+	env.Insert(m3)
+
+	// Set time
+	env.mu.Lock()
+	env.time = 250
+	env.mu.Unlock()
+
+	// Save snapshot
+	if err := env.SaveSnapshot(); err != nil {
+		t.Fatalf("Failed to save snapshot: %v", err)
+	}
+
+	// Create new environment and load snapshot
+	newEnv := NewEnvironment(schema)
+	newEnv.SetEnvironmentID("test-env")
+	newEnv.SetSnapshotDir(tmpDir)
+
+	if err := newEnv.LoadSnapshot(); err != nil {
+		t.Fatalf("Failed to load snapshot: %v", err)
+	}
+
+	// Verify all state was restored
+	if newEnv.time != 250 {
+		t.Errorf("Expected time 250, got %d", newEnv.time)
+	}
+
+	molecules := newEnv.AllMolecules()
+	if len(molecules) != 3 {
+		t.Fatalf("Expected 3 molecules, got %d", len(molecules))
+	}
+
+	// Verify molecule details
+	moleculeMap := make(map[MoleculeID]Molecule)
+	for _, m := range molecules {
+		moleculeMap[m.ID] = m
+	}
+
+	// Check m1
+	if mol1, ok := moleculeMap[m1.ID]; !ok {
+		t.Error("Expected m1 to be restored")
+	} else {
+		if mol1.Species != "Species1" {
+			t.Errorf("Expected m1 species 'Species1', got '%s'", mol1.Species)
+		}
+		if mol1.Payload["field1"] != "value1" {
+			t.Errorf("Expected m1 field1='value1', got '%v'", mol1.Payload["field1"])
+		}
+	}
+
+	// Check m2
+	if mol2, ok := moleculeMap[m2.ID]; !ok {
+		t.Error("Expected m2 to be restored")
+	} else {
+		if mol2.Species != "Species2" {
+			t.Errorf("Expected m2 species 'Species2', got '%s'", mol2.Species)
+		}
+		// JSON unmarshals numbers as float64
+		if val, ok := mol2.Payload["field2"].(float64); !ok || val != 123 {
+			t.Errorf("Expected m2 field2=123, got '%v'", mol2.Payload["field2"])
+		}
+	}
+
+	// Check m3
+	if mol3, ok := moleculeMap[m3.ID]; !ok {
+		t.Error("Expected m3 to be restored")
+	} else {
+		if mol3.Species != "Species1" {
+			t.Errorf("Expected m3 species 'Species1', got '%s'", mol3.Species)
+		}
+		if mol3.Payload["field3"] != true {
+			t.Errorf("Expected m3 field3=true, got '%v'", mol3.Payload["field3"])
+		}
+	}
+}
+
+func TestEnvironment_LoadSnapshot_EnvIDMismatch(t *testing.T) {
+	schema := NewSchema("test")
+	schema = schema.WithSpecies(Species{Name: "TestSpecies"})
+
+	tmpDir := t.TempDir()
+
+	// Create a snapshot file manually with wrong envID
+	// The file will be at the path for "different-env" but contain "test-env" as the envID
+	m := NewMolecule("TestSpecies", nil, 0)
+	snapshot := Snapshot{
+		EnvironmentID: "test-env", // Wrong envID in snapshot
+		Time:          50,
+		Molecules:     []Molecule{m},
+	}
+
+	data, err := EncodeSnapshotJSON(snapshot)
+	if err != nil {
+		t.Fatalf("Failed to encode snapshot: %v", err)
+	}
+
+	// Write to path that "different-env" would use
+	path := filepath.Join(tmpDir, "different-env.snapshot.json")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("Failed to write snapshot: %v", err)
+	}
+
+	// Try to load with different env ID
+	newEnv := NewEnvironment(schema)
+	newEnv.SetEnvironmentID("different-env")
+	newEnv.SetSnapshotDir(tmpDir)
+
+	err = newEnv.LoadSnapshot()
+	if err == nil {
+		t.Fatal("Expected error when loading snapshot with mismatched env ID, got nil")
+	}
+
+	// Verify error mentions environment ID mismatch
+	if err.Error() == "" {
+		t.Error("Expected non-empty error message")
+	}
+}
+
+func TestEnvironment_LoadSnapshot_UnknownSpecies(t *testing.T) {
+	// Create schema with only Species1
+	schema1 := NewSchema("test1")
+	schema1 = schema1.WithSpecies(Species{Name: "Species1"})
+
+	env := NewEnvironment(schema1)
+	env.SetEnvironmentID("test-env")
+
+	tmpDir := t.TempDir()
+	env.SetSnapshotDir(tmpDir)
+
+	// Create snapshot with Species1 and Species2
+	m1 := NewMolecule("Species1", nil, 0)
+	m2 := NewMolecule("Species2", nil, 0) // Species2 not in schema
+	env.Insert(m1)
+	env.Insert(m2)
+
+	env.mu.Lock()
+	env.time = 75
+	env.mu.Unlock()
+
+	// Manually create snapshot with invalid species (bypassing validation)
+	snapshot := Snapshot{
+		EnvironmentID: "test-env",
+		Time:          75,
+		Molecules:      []Molecule{m1, m2},
+	}
+
+	data, err := EncodeSnapshotJSON(snapshot)
+	if err != nil {
+		t.Fatalf("Failed to encode snapshot: %v", err)
+	}
+
+	path := filepath.Join(tmpDir, "test-env.snapshot.json")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("Failed to write snapshot: %v", err)
+	}
+
+	// Try to load with schema that doesn't have Species2
+	newEnv := NewEnvironment(schema1)
+	newEnv.SetEnvironmentID("test-env")
+	newEnv.SetSnapshotDir(tmpDir)
+
+	err = newEnv.LoadSnapshot()
+	if err == nil {
+		t.Fatal("Expected error when loading snapshot with unknown species, got nil")
+	}
+
+	// Verify error mentions species validation
+	if err.Error() == "" {
+		t.Error("Expected non-empty error message")
+	}
+}
+
+func TestEnvironment_LoadSnapshot_NoFile(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	tmpDir := t.TempDir()
+	env.SetSnapshotDir(tmpDir)
+
+	// Try to load snapshot when file doesn't exist (should be no-op)
+	err := env.LoadSnapshot()
+	if err != nil {
+		t.Errorf("Expected no error when snapshot file doesn't exist, got %v", err)
+	}
+
+	// Verify environment is still empty
+	if env.time != 0 {
+		t.Errorf("Expected time 0, got %d", env.time)
+	}
+	if len(env.AllMolecules()) != 0 {
+		t.Errorf("Expected 0 molecules, got %d", len(env.AllMolecules()))
+	}
+}
+
+func TestEnvironment_LoadSnapshot_NoSnapshotDir(t *testing.T) {
+	schema := NewSchema("test")
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID("test-env")
+
+	// Don't set snapshot dir (empty)
+	env.SetSnapshotDir("")
+
+	// Try to load snapshot (should be no-op)
+	err := env.LoadSnapshot()
+	if err != nil {
+		t.Errorf("Expected no error when snapshot dir is not set, got %v", err)
 	}
 }
 

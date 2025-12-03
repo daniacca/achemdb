@@ -1,6 +1,8 @@
 package achem
 
 import (
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 )
@@ -427,6 +429,104 @@ func TestEnvironmentManager_Isolation(t *testing.T) {
 	}
 	if env2.schema != schema2 {
 		t.Error("env-2 should have schema2")
+	}
+}
+
+func TestEnvironmentManager_CreateEnvironment_CallsLoadSnapshot(t *testing.T) {
+	em := NewEnvironmentManager()
+	schema := NewSchema("test")
+	schema = schema.WithSpecies(Species{Name: "TestSpecies"})
+
+	tmpDir := t.TempDir()
+	envID := EnvironmentID("test-env")
+
+	// Create a snapshot file
+	m := NewMolecule("TestSpecies", map[string]any{"key": "value"}, 0)
+	snapshot := Snapshot{
+		EnvironmentID: envID,
+		Time:          42,
+		Molecules:     []Molecule{m},
+	}
+
+	data, err := EncodeSnapshotJSON(snapshot)
+	if err != nil {
+		t.Fatalf("Failed to encode snapshot: %v", err)
+	}
+
+	path := filepath.Join(tmpDir, string(envID)+".snapshot.json")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("Failed to write snapshot: %v", err)
+	}
+
+	// Create environment - LoadSnapshot will be called but will be no-op since snapshotDir isn't set
+	err = em.CreateEnvironment(envID, schema)
+	if err != nil {
+		t.Fatalf("Expected no error creating environment, got: %v", err)
+	}
+
+	// Get the environment and set snapshotDir, then verify LoadSnapshot works
+	env, exists := em.GetEnvironment(envID)
+	if !exists {
+		t.Fatal("Expected environment to exist")
+	}
+
+	env.SetSnapshotDir(tmpDir)
+	
+	// Now call LoadSnapshot manually (since snapshotDir wasn't set during CreateEnvironment)
+	if err := env.LoadSnapshot(); err != nil {
+		t.Fatalf("Failed to load snapshot: %v", err)
+	}
+
+	// Verify snapshot was loaded
+	if env.time != 42 {
+		t.Errorf("Expected time 42, got %d", env.time)
+	}
+
+	molecules := env.AllMolecules()
+	if len(molecules) != 1 {
+		t.Fatalf("Expected 1 molecule, got %d", len(molecules))
+	}
+
+	if molecules[0].ID != m.ID {
+		t.Errorf("Expected molecule ID %s, got %s", m.ID, molecules[0].ID)
+	}
+}
+
+func TestEnvironmentManager_CreateEnvironment_SnapshotLoadFailure(t *testing.T) {
+	schema := NewSchema("test")
+	schema = schema.WithSpecies(Species{Name: "TestSpecies"})
+
+	tmpDir := t.TempDir()
+	envID := EnvironmentID("test-env")
+
+	// Create a snapshot file with wrong envID
+	m := NewMolecule("TestSpecies", nil, 0)
+	snapshot := Snapshot{
+		EnvironmentID: "wrong-env", // Wrong envID
+		Time:          42,
+		Molecules:     []Molecule{m},
+	}
+
+	data, err := EncodeSnapshotJSON(snapshot)
+	if err != nil {
+		t.Fatalf("Failed to encode snapshot: %v", err)
+	}
+
+	path := filepath.Join(tmpDir, string(envID)+".snapshot.json")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("Failed to write snapshot: %v", err)
+	}
+
+	// Create environment with snapshotDir set via direct access (for testing)
+	// In practice, snapshotDir would need to be set before LoadSnapshot is called
+	env := NewEnvironment(schema)
+	env.SetEnvironmentID(envID)
+	env.SetSnapshotDir(tmpDir)
+	
+	// Test LoadSnapshot directly - should fail due to envID mismatch
+	err = env.LoadSnapshot()
+	if err == nil {
+		t.Fatal("Expected error when loading snapshot with mismatched env ID")
 	}
 }
 

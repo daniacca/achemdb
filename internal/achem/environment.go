@@ -1,32 +1,40 @@
 package achem
 
 import (
+	"fmt"
+	"log"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
 
 type Environment struct {
-	mu          sync.RWMutex
-	schema      *Schema
-	time        int64
-	mols        map[MoleculeID]Molecule
-	rand        *rand.Rand
-	stopCh      chan struct{}
-	isRunning   bool
-	envID       EnvironmentID
-	notifierMgr *NotificationManager
+	mu                sync.RWMutex
+	schema            *Schema
+	time              int64
+	mols              map[MoleculeID]Molecule
+	rand              *rand.Rand
+	stopCh            chan struct{}
+	isRunning         bool
+	envID             EnvironmentID
+	notifierMgr       *NotificationManager
+	snapshotDir       string
+	snapshotEveryNTicks int
+	snapshotMu        sync.Mutex
 }
 
 func NewEnvironment(schema *Schema) *Environment {
 	return &Environment{
-		schema:      schema,
-		mols:        make(map[MoleculeID]Molecule),
-		rand:        rand.New(rand.NewSource(time.Now().UnixNano())),
-		time:        0,
-		stopCh:      make(chan struct{}),
-		isRunning:   false,
-		notifierMgr: NewNotificationManager(),
+		schema:            schema,
+		mols:              make(map[MoleculeID]Molecule),
+		rand:              rand.New(rand.NewSource(time.Now().UnixNano())),
+		time:              0,
+		stopCh:            make(chan struct{}),
+		isRunning:         false,
+		notifierMgr:       NewNotificationManager(),
+		snapshotEveryNTicks: 1000, // default value
 	}
 }
 
@@ -49,6 +57,23 @@ func (e *Environment) GetNotificationManager() *NotificationManager {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.notifierMgr
+}
+
+// SetSnapshotDir sets the directory where snapshots will be saved.
+// If set to empty string, snapshots are disabled.
+func (e *Environment) SetSnapshotDir(dir string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.snapshotDir = dir
+}
+
+// SetSnapshotEveryNTicks sets how often snapshots should be taken (in ticks).
+// Snapshots are taken when time % snapshotEveryNTicks == 0.
+// If set to 0 or negative, snapshots are disabled.
+func (e *Environment) SetSnapshotEveryNTicks(n int) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.snapshotEveryNTicks = n
 }
 
 // envView is a private adapter that exposes read-only methods
@@ -283,6 +308,11 @@ func (e *Environment) Step() {
 		}
 		e.mols[nm.ID] = nm
 	}
+
+	// 4) SNAPSHOT PHASE (if needed, non-blocking)
+	if e.snapshotDir != "" && e.snapshotEveryNTicks > 0 && e.time % int64(e.snapshotEveryNTicks) == 0 {
+		go e.SaveSnapshot()
+	}
 }
 
 // Run will start the environment in a goroutine, starting it's own ticker that will
@@ -423,4 +453,152 @@ func findPartnersForReaction(partnerCfg PartnerConfig, m Molecule, env EnvView) 
 		return matches[:count]
 	}
 	return matches
+}
+
+// SnapshotPath returns the file path for the snapshot based on the environment ID.
+// Format: "<SnapshotDir>/<envID>.snapshot.json"
+func (e *Environment) SnapshotPath() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return filepath.Join(e.snapshotDir, string(e.envID)+".snapshot.json")
+}
+
+// createSnapshot creates a snapshot of the current environment state.
+// It runs under a read lock to safely capture the state without blocking readers.
+func (e *Environment) createSnapshot() (Snapshot, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	molecules := make([]Molecule, 0, len(e.mols))
+	for _, m := range e.mols {
+		molecules = append(molecules, m)
+	}
+
+	return Snapshot{
+		EnvironmentID: e.envID,
+		Time:          e.time,
+		Molecules:     molecules,
+	}, nil
+}
+
+// SaveSnapshot saves the current environment state to disk atomically.
+// It uses a temporary file and rename operation to ensure atomic writes.
+// This method is safe to call concurrently and will serialize snapshot attempts.
+func (e *Environment) SaveSnapshot() error {
+	// Serialize snapshot attempts to avoid concurrent writes
+	e.snapshotMu.Lock()
+	defer e.snapshotMu.Unlock()
+
+	// Check if snapshot directory is configured
+	if e.snapshotDir == "" {
+		return nil // Snapshot disabled, silently skip
+	}
+
+	// Create snapshot
+	snapshot, err := e.createSnapshot()
+	if err != nil {
+		log.Printf("snapshot failed: failed to create snapshot: %v", err)
+		return err
+	}
+
+	// Encode to JSON
+	data, err := EncodeSnapshotJSON(snapshot)
+	if err != nil {
+		log.Printf("snapshot failed: failed to encode snapshot: %v", err)
+		return err
+	}
+
+	// Get snapshot path
+	path := e.SnapshotPath()
+
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		log.Printf("snapshot failed: failed to create snapshot directory: %v", err)
+		return err
+	}
+
+	// Write atomically using temp file + rename
+	tempPath := path + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+		log.Printf("snapshot failed: failed to write temp file: %v", err)
+		return err
+	}
+
+	if err := os.Rename(tempPath, path); err != nil {
+		// Clean up temp file on error
+		os.Remove(tempPath)
+		log.Printf("snapshot failed: failed to rename temp file: %v", err)
+		return err
+	}
+
+	log.Printf("snapshot created: env_id=%s time=%d molecules=%d path=%s", snapshot.EnvironmentID, snapshot.Time, len(snapshot.Molecules), path)
+	return nil
+}
+
+// LoadSnapshot loads a snapshot from disk and restores the environment state.
+// If the snapshot directory is not configured or the snapshot file does not exist, this is a no-op and returns nil.
+// The snapshot is validated to ensure:
+//   - The snapshot's EnvironmentID matches the environment's ID
+//   - All molecule species exist in the schema
+//
+// On success, the environment's time and molecules are restored from the snapshot.
+func (e *Environment) LoadSnapshot() error {
+	// Check if snapshot directory is configured
+	e.mu.RLock()
+	snapshotDir := e.snapshotDir
+	e.mu.RUnlock()
+
+	if snapshotDir == "" {
+		return nil // Snapshot directory not configured, nothing to load
+	}
+
+	// Get snapshot path
+	path := e.SnapshotPath()
+
+	// Check if file exists - if not, no-op
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil // Snapshot doesn't exist, nothing to load
+	}
+
+	// Read snapshot file
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read snapshot file: %w", err)
+	}
+
+	// Decode JSON
+	snapshot, err := DecodeSnapshotJSON(data)
+	if err != nil {
+		return fmt.Errorf("failed to decode snapshot: %w", err)
+	}
+
+	// Validate snapshot EnvironmentID matches
+	e.mu.RLock()
+	envID := e.envID
+	schema := e.schema
+	e.mu.RUnlock()
+
+	if snapshot.EnvironmentID != envID {
+		return fmt.Errorf("snapshot environment ID mismatch: expected %s, got %s", envID, snapshot.EnvironmentID)
+	}
+
+	// Validate snapshot (checks species exist in schema)
+	if err := ValidateSnapshot(snapshot, schema); err != nil {
+		return fmt.Errorf("snapshot validation failed: %w", err)
+	}
+
+	// Restore environment state under lock
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.time = snapshot.Time
+
+	// Restore molecules
+	e.mols = make(map[MoleculeID]Molecule, len(snapshot.Molecules))
+	for _, m := range snapshot.Molecules {
+		e.mols[m.ID] = m
+	}
+
+	log.Printf("snapshot loaded: env_id=%s time=%d molecules=%d path=%s", snapshot.EnvironmentID, snapshot.Time, len(snapshot.Molecules), path)
+	return nil
 }

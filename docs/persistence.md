@@ -1,191 +1,172 @@
-# Persistence (Design)
+# Persistence and Snapshots
 
-> **Status:** design document – persistence is not implemented yet.  
-> This file describes the planned approach for snapshots and restarts.
+## Purpose of Snapshots
 
-AChemDB is primarily an **in-memory engine**. By default:
+Snapshots in AChemDB serve two primary purposes:
 
-- molecules live only in memory,
-- if the process is restarted, all environments start empty and `EnvTime` resets.
+1. **Cold Restore**: Allow environments to be restored from a saved state after a server restart or shutdown. This enables long-running systems to maintain state across restarts.
 
-For many scenarios this is OK (e.g. purely derived alerts), but for long-running systems we want:
+2. **Crash Recovery**: Provide a recovery point in case of unexpected process termination. The latest snapshot can be loaded to restore the environment to a known good state.
 
-- the ability to **restart without losing all state**,
-- predictable behaviour across restarts.
+**Important**: Snapshots are **not a Write-Ahead Log (WAL)**. They represent point-in-time state captures, not a sequential log of all changes. Snapshots do not provide transaction-level durability or exact replay capabilities.
 
-This document outlines the planned design for persistence.
+## What is Persisted
 
----
+A snapshot captures the essential state of an environment:
 
-## Goals
+- **`env_id`**: The unique identifier of the environment (type: `EnvironmentID`)
+- **`env_time`**: The current time/tick counter of the environment (type: `int64`)
+- **`molecules`**: A complete list of all molecules currently in the environment (type: `[]Molecule`)
 
-- Provide **periodic snapshots** of each environment:
-  - include all molecules,
-  - include the environment time.
-- On restart, the server can **load the latest snapshot** for each environment.
-- Keep implementation simple:
-  - no transactional log, no full ACID semantics,
-  - “best effort” persistence that is good enough for many use cases.
-- Avoid impacting the core reaction engine’s performance too much.
+Each molecule includes:
+- `id`: Unique molecule identifier
+- `species`: The species name
+- `payload`: Arbitrary key-value data
+- `energy`: Energy value (float64)
+- `stability`: Stability value (float64)
+- `tags`: List of string tags
+- `created_at`: Timestamp when molecule was created
+- `last_touched_at`: Timestamp when molecule was last modified
 
-Later versions may add an **event log / WAL** for finer-grained replay, but that is out of scope for the initial persistence.
+## What is NOT Persisted
 
----
+The following state is **not** included in snapshots and will be reset on restore:
 
-## Snapshot model
+- **Notification queue**: Pending notification jobs are lost
+- **Reaction engine state**: Internal reaction processing state is not preserved
+- **Notifiers**: Active notifier connections and configurations are not saved
+- **HTTP server state**: Server connections, sessions, and in-flight requests are not persisted
 
-We introduce a concept of **environment snapshot**:
+After restore, the environment will:
+- Continue processing reactions from the restored state
+- Generate new notifications as reactions fire
+- Require re-registration of notifiers and callbacks
+
+## JSON Schema of the Snapshot Format
+
+### Full Example
 
 ```json
 {
-  "env_id": "security-alerts",
-  "schema_name": "security-alerts",
+  "environment_id": "security-alerts",
   "time": 12345,
   "molecules": [
     {
-      "id": "...",
+      "id": "mol_abc123",
       "species": "Event",
-      "payload": { "type": "login_failed", "ip": "1.2.3.4" },
+      "payload": {
+        "type": "login_failed",
+        "ip": "1.2.3.4",
+        "user_id": 42
+      },
       "energy": 1.0,
       "stability": 1.0,
-      "tags": [],
+      "tags": ["security", "authentication"],
       "created_at": 42,
       "last_touched_at": 100
+    },
+    {
+      "id": "mol_def456",
+      "species": "Alert",
+      "payload": {
+        "severity": "high",
+        "message": "Multiple failed login attempts"
+      },
+      "energy": 0.8,
+      "stability": 0.9,
+      "tags": [],
+      "created_at": 100,
+      "last_touched_at": 100
     }
-    // ...
   ]
 }
 ```
 
-Notes:
+### Schema Definition
 
-- The snapshot is **per environment**.
-- It is logically independent of how the schema is defined:
-  - to restore an environment correctly, you must use a compatible schema.
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["environment_id", "time", "molecules"],
+  "properties": {
+    "environment_id": {
+      "type": "string",
+      "description": "Unique identifier for the environment"
+    },
+    "time": {
+      "type": "integer",
+      "description": "Environment time/tick counter"
+    },
+    "molecules": {
+      "type": "array",
+      "description": "List of all molecules in the environment",
+      "items": {
+        "type": "object",
+        "required": ["id", "species", "payload", "energy", "stability", "tags", "created_at", "last_touched_at"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique molecule identifier"
+          },
+          "species": {
+            "type": "string",
+            "description": "Species name"
+          },
+          "payload": {
+            "type": "object",
+            "description": "Arbitrary key-value data",
+            "additionalProperties": true
+          },
+          "energy": {
+            "type": "number",
+            "description": "Energy value"
+          },
+          "stability": {
+            "type": "number",
+            "description": "Stability value"
+          },
+          "tags": {
+            "type": "array",
+            "description": "List of string tags",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "integer",
+            "description": "Timestamp when molecule was created"
+          },
+          "last_touched_at": {
+            "type": "integer",
+            "description": "Timestamp when molecule was last modified"
+          }
+        }
+      }
+    }
+  }
+}
+```
 
-The on-disk representation can be:
+## Future Extensions
 
-- JSON (human-readable, easier to debug),
-- or a binary format later for performance.
+### Write-Ahead Log (WAL)
 
-The first version will likely use JSON for simplicity.
+Future versions may introduce a Write-Ahead Log to complement snapshots:
 
----
+- **Purpose**: Provide fine-grained replay capabilities and transaction-level durability
+- **Content**: Sequential log of all reaction effects, molecule changes, and notification events
+- **Use Cases**: 
+  - Exact replay for debugging
+  - Time-travel queries
+  - Full recovery with minimal data loss
+- **Interaction with Snapshots**: WAL entries would be applied on top of the latest snapshot during restore
 
-## When snapshots are taken
+### Sharded Restore
 
-Snapshots are planned to be taken in one of two ways:
+For large environments with many molecules:
 
-1. **Periodic snapshots** (recommended)
-   - Each environment can be configured with:
-     - `snapshot_interval` (in wall-clock time), **or**
-     - `snapshot_every_n_ticks` (in ticks).
-   - A background goroutine:
-     - sleeps for the configured interval,
-     - grabs the environment lock,
-     - copies all molecules into a slice,
-     - writes a snapshot file to disk.
-2. **Manual snapshots** (optional)
-   - Provide an HTTP endpoint or Go API:
-     - `POST /env/{envID}/snapshot`
-   - This forces an immediate snapshot.
-
-To avoid blocking the engine:
-
-- we can copy the in-memory state under lock,
-- but write the file **asynchronously** in a separate goroutine.
-
----
-
-## Where snapshots are stored
-
-AchemDB server will be configurable with:
-
-- a base directory for snapshots, e.g. `--snapshot-dir=./data`.
-  For each environment, we can use:
-- a single file that is periodically overwritten, e.g.:
-  - `data/env_<envID>_snapshot.json`
-- or a rolling set of snapshot files, e.g.: - `data/env_<envID>_snapshot_0001.json` - `data/env_<envID>_snapshot_0002.json`
-  The first version will likely use a single “latest” file per environment:
-- simpler to manage,
-- avoids unbounded disk growth.
-
----
-
-## Restore on startup
-
-On startup, the server will:
-
-1. Look in the snapshot directory for files matching existing environment IDs.
-2. For each snapshot file:
-   - parse JSON into a `Snapshot` struct,
-   - create an environment with the given `env_id` and schema,
-   - set `EnvTime` from the snapshot,
-   - populate `mols` map with the snapshot molecules.
-
-The schema used for restoration must be **compatible**:
-
-- same species names,
-- same expectations for payload fields.
-
-The responsibility of providing the right schema (e.g. via `/env/{envID}/schema`) remains with the user:
-
-- In a simple setup, you apply your schema first, then AChemDB loads snapshots.
-- In more advanced setup, the schema could be loaded from its own config file.
-
----
-
-## Interaction with notifications
-
-Snapshots are **not** planned to capture:
-
-- pending notification jobs,
-- retry state for notifiers,
-- open WebSocket connections.
-
-After a restart:
-
-- reactions will continue from the restored state,
-- new notifications will be emitted as reactions fire,
-- in-flight notifications at the time of crash may be lost.
-
-For systems that need stronger guarantees, future work may add:
-
-- a persistent log of `NotificationEvent`s,
-- explicit ack/retry mechanisms on the consumer side.
-
----
-
-## Limitations and trade-offs
-
-The snapshot-based persistence intentionally does **not** provide:
-
-- transaction-level durability (no guarantee about the exact point-in-time consistency),
-- exact replay of random behaviour (randomness per tick is not logged),
-- full audit log of all reactions.
-
-Instead, it aims to be:
-
-- **simple**, easy to reason about,
-- good enough to avoid “complete loss of state” on restart,
-- optional – you can run AChemDB fully in-memory if you prefer.
-
----
-
-## Future directions
-
-Potential future improvements:
-
-- **Event log / WAL**:
-  - log every `ReactionEffect` or `NotificationEvent`,
-  - support replay for debugging, time-travel or full recovery.
-- **Configurable snapshot policies** per environment:
-  - different snapshot intervals for hot vs cold environments.
-- **Pluggable storage backends**:
-  - write snapshots to S3, GCS, or other object stores.
-
-For now, the first implementation will focus on:
-
-- per-environment JSON snapshots,
-- periodic snapshotting,
-- best-effort restore on startup.
+- **Sharding Strategy**: Split molecules across multiple snapshot files based on criteria (e.g., species, ID hash)
+- **Parallel Loading**: Load shards concurrently to reduce restore time
+- **Incremental Snapshots**: Only persist molecules that have changed since the last snapshot
+- **Compression**: Apply compression to snapshot files to reduce storage requirements

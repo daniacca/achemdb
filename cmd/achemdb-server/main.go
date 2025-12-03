@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -13,8 +14,9 @@ import (
 )
 
 type Server struct {
-	manager       *achem.EnvironmentManager
-	globalNotifierMgr *achem.NotificationManager
+	manager            *achem.EnvironmentManager
+	globalNotifierMgr  *achem.NotificationManager
+	snapshotDir        string
 }
 
 func NewServer() *Server {
@@ -23,6 +25,11 @@ func NewServer() *Server {
 		manager:       achem.NewEnvironmentManager(),
 		globalNotifierMgr: globalMgr,
 	}
+}
+
+// SetSnapshotDir sets the snapshot directory for all environments
+func (s *Server) SetSnapshotDir(dir string) {
+	s.snapshotDir = dir
 }
 
 // extractEnvID extracts the environment ID from a path like "/env/{envID}/..."
@@ -90,6 +97,10 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 	env, exists := s.manager.GetEnvironment(envID)
 	if exists {
 		env.SetNotificationManager(s.globalNotifierMgr)
+		// Set snapshot directory if configured
+		if s.snapshotDir != "" {
+			env.SetSnapshotDir(s.snapshotDir)
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -297,6 +308,10 @@ func (s *Server) handleEnvironmentRoutes(w http.ResponseWriter, r *http.Request)
 			s.handleStop(w, r)
 		case remainingPath == "/molecules" && r.Method == http.MethodGet:
 			s.handleListMolecules(w, r)
+		case remainingPath == "/snapshot" && r.Method == http.MethodPost:
+			s.handleSaveSnapshot(w, r)
+		case remainingPath == "/snapshot" && r.Method == http.MethodGet:
+			s.handleGetSnapshot(w, r)
 		case remainingPath == "" && r.Method == http.MethodDelete:
 			s.handleDeleteEnvironment(w, r)
 		default:
@@ -424,4 +439,94 @@ func (s *Server) handleUnregisterNotifier(w http.ResponseWriter, r *http.Request
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("notifier unregistered"))
+}
+
+// POST /env/{envID}/snapshot
+// Triggers a synchronous snapshot save
+func (s *Server) handleSaveSnapshot(w http.ResponseWriter, r *http.Request) {
+	envID, _ := extractEnvID(r.URL.Path)
+	if envID == "" {
+		http.Error(w, "environment ID is required in path: /env/{envID}/snapshot", http.StatusBadRequest)
+		return
+	}
+
+	env, exists := s.manager.GetEnvironment(envID)
+	if !exists {
+		http.Error(w, "environment not found", http.StatusNotFound)
+		return
+	}
+
+	// Check if snapshot directory is configured
+	if s.snapshotDir == "" {
+		http.Error(w, "snapshot directory not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Ensure snapshot directory is set on environment
+	env.SetSnapshotDir(s.snapshotDir)
+
+	// Save snapshot synchronously
+	if err := env.SaveSnapshot(); err != nil {
+		http.Error(w, "failed to save snapshot: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Get snapshot path for response
+	path := env.SnapshotPath()
+
+	response := map[string]string{
+		"status": "ok",
+		"path":   path,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "cannot encode response: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// GET /env/{envID}/snapshot
+// Returns the raw snapshot JSON if it exists
+func (s *Server) handleGetSnapshot(w http.ResponseWriter, r *http.Request) {
+	envID, _ := extractEnvID(r.URL.Path)
+	if envID == "" {
+		http.Error(w, "environment ID is required in path: /env/{envID}/snapshot", http.StatusBadRequest)
+		return
+	}
+
+	env, exists := s.manager.GetEnvironment(envID)
+	if !exists {
+		http.Error(w, "environment not found", http.StatusNotFound)
+		return
+	}
+
+	// Check if snapshot directory is configured
+	if s.snapshotDir == "" {
+		http.Error(w, "snapshot directory not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Ensure snapshot directory is set on environment
+	env.SetSnapshotDir(s.snapshotDir)
+
+	// Get snapshot path
+	path := env.SnapshotPath()
+
+	// Read snapshot file
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "snapshot not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "failed to read snapshot: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return raw JSON
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
