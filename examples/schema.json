@@ -1,0 +1,65 @@
+{
+  "name": "default-system",
+  "species": [
+    {
+      "name": "Event",
+      "description": "Raw system events"
+    },
+    {
+      "name": "Processed",
+      "description": "Processed events"
+    },
+    {
+      "name": "Alert",
+      "description": "System alerts"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "process_event",
+      "name": "Process incoming events",
+      "input": {
+        "species": "Event"
+      },
+      "rate": 0.8,
+      "effects": [
+        { "consume": true },
+        {
+          "create": {
+            "species": "Processed",
+            "payload": {
+              "original_type": "$m.type",
+              "processed_at": "$m.created_at"
+            },
+            "energy": 1.0,
+            "stability": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "decay_processed",
+      "name": "Decay processed events",
+      "input": {
+        "species": "Processed"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.05
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    }
+  ]
+}
+

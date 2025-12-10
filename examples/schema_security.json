@@ -52,6 +52,14 @@
           "update": {
             "energy_add": -0.1
           }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
         }
       ]
     }

@@ -1,0 +1,239 @@
+{
+  "name": "monitoring-system",
+  "species": [
+    {
+      "name": "Metric",
+      "description": "Raw metrics from systems"
+    },
+    {
+      "name": "Anomaly",
+      "description": "Detected anomalies"
+    },
+    {
+      "name": "Incident",
+      "description": "Incidents requiring attention"
+    },
+    {
+      "name": "Baseline",
+      "description": "Baseline metric values"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "establish_baseline",
+      "name": "Establish metric baselines",
+      "input": {
+        "species": "Metric"
+      },
+      "rate": 0.2,
+      "effects": [
+        {
+          "if": {
+            "count_molecules": {
+              "species": "Baseline",
+              "where": {
+                "metric_name": { "eq": "$m.name" }
+              },
+              "op": { "eq": 0 }
+            }
+          },
+          "then": [
+            {
+              "create": {
+                "species": "Baseline",
+                "payload": {
+                  "metric_name": "$m.name",
+                  "avg_value": "$m.value",
+                  "timestamp": "$m.created_at"
+                },
+                "energy": 2.0,
+                "stability": 1.0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "detect_anomaly",
+      "name": "Detect metric anomalies",
+      "input": {
+        "species": "Metric"
+      },
+      "rate": 0.6,
+      "effects": [
+        {
+          "if": {
+            "count_molecules": {
+              "species": "Baseline",
+              "where": {
+                "metric_name": { "eq": "$m.name" }
+              },
+              "op": { "gte": 1 }
+            }
+          },
+          "then": [
+            {
+              "if": {
+                "count_molecules": {
+                  "species": "Anomaly",
+                  "where": {
+                    "metric_name": { "eq": "$m.name" }
+                  },
+                  "op": { "lt": 5 }
+                }
+              },
+              "then": [
+                {
+                  "create": {
+                    "species": "Anomaly",
+                    "payload": {
+                      "metric_name": "$m.name",
+                      "value": "$m.value",
+                      "deviation": "high"
+                    },
+                    "energy": 1.5,
+                    "stability": 0.9
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "anomaly_to_incident",
+      "name": "Promote multiple anomalies to incident",
+      "input": {
+        "species": "Anomaly"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "if": {
+            "count_molecules": {
+              "species": "Anomaly",
+              "where": {
+                "metric_name": { "eq": "$m.metric_name" }
+              },
+              "op": { "gte": 3 }
+            }
+          },
+          "then": [
+            {
+              "if": {
+                "count_molecules": {
+                  "species": "Incident",
+                  "where": {
+                    "metric_name": { "eq": "$m.metric_name" }
+                  },
+                  "op": { "eq": 0 }
+                }
+              },
+              "then": [
+                {
+                  "create": {
+                    "species": "Incident",
+                    "payload": {
+                      "metric_name": "$m.metric_name",
+                      "severity": "high",
+                      "anomaly_count": 3
+                    },
+                    "energy": 3.0,
+                    "stability": 1.0
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "decay_anomaly",
+      "name": "Decay anomalies over time",
+      "input": {
+        "species": "Anomaly"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.15
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    },
+    {
+      "id": "update_baseline",
+      "name": "Update baseline values",
+      "input": {
+        "species": "Baseline"
+      },
+      "rate": 0.1,
+      "effects": [
+        {
+          "update": {
+            "energy_add": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "id": "decay_metric",
+      "name": "Decay metrics over time",
+      "input": {
+        "species": "Metric"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.2
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    },
+    {
+      "id": "decay_incident",
+      "name": "Decay incidents over time",
+      "input": {
+        "species": "Incident"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.05
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    }
+  ]
+}
+

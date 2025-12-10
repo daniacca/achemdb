@@ -1,0 +1,229 @@
+{
+  "name": "ecommerce-system",
+  "species": [
+    {
+      "name": "PageView",
+      "description": "User page view events"
+    },
+    {
+      "name": "CartItem",
+      "description": "Items added to shopping cart"
+    },
+    {
+      "name": "Purchase",
+      "description": "Completed purchases"
+    },
+    {
+      "name": "Recommendation",
+      "description": "Product recommendations"
+    },
+    {
+      "name": "AbandonedCart",
+      "description": "Abandoned shopping carts"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "pageview_to_cart",
+      "name": "Convert page views to cart items",
+      "input": {
+        "species": "PageView",
+        "where": {
+          "action": { "eq": "add_to_cart" }
+        }
+      },
+      "rate": 1.0,
+      "effects": [
+        { "consume": true },
+        {
+          "create": {
+            "species": "CartItem",
+            "payload": {
+              "user_id": "$m.user_id",
+              "product_id": "$m.product_id",
+              "price": "$m.price"
+            },
+            "energy": 1.0,
+            "stability": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "cart_to_purchase",
+      "name": "Convert cart items to purchases",
+      "input": {
+        "species": "CartItem"
+      },
+      "rate": 1.0,
+      "effects": [
+        { "consume": true },
+        {
+          "create": {
+            "species": "Purchase",
+            "payload": {
+              "user_id": "$m.user_id",
+              "product_id": "$m.product_id",
+              "amount": "$m.price",
+              "timestamp": "$m.created_at"
+            },
+            "energy": 2.0,
+            "stability": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "generate_recommendation",
+      "name": "Generate product recommendations",
+      "input": {
+        "species": "Purchase"
+      },
+      "rate": 0.5,
+      "effects": [
+        {
+          "if": {
+            "count_molecules": {
+              "species": "Recommendation",
+              "where": {
+                "user_id": { "eq": "$m.user_id" },
+                "based_on": { "eq": "$m.product_id" }
+              },
+              "op": { "eq": 0 }
+            }
+          },
+          "then": [
+            {
+              "create": {
+                "species": "Recommendation",
+                "payload": {
+                  "user_id": "$m.user_id",
+                  "based_on": "$m.product_id",
+                  "recommendation_type": "similar_products"
+                },
+                "energy": 1.5,
+                "stability": 0.8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "detect_abandoned_cart",
+      "name": "Detect abandoned carts",
+      "input": {
+        "species": "CartItem"
+      },
+      "rate": 0.3,
+      "effects": [
+        {
+          "if": {
+            "count_molecules": {
+              "species": "CartItem",
+              "where": {
+                "user_id": { "eq": "$m.user_id" }
+              },
+              "op": { "gte": 2 }
+            }
+          },
+          "then": [
+            {
+              "if": {
+                "count_molecules": {
+                  "species": "AbandonedCart",
+                  "where": {
+                    "user_id": { "eq": "$m.user_id" }
+                  },
+                  "op": { "eq": 0 }
+                }
+              },
+              "then": [
+                {
+                  "create": {
+                    "species": "AbandonedCart",
+                    "payload": {
+                      "user_id": "$m.user_id",
+                      "cart_age": "$m.created_at"
+                    },
+                    "energy": 1.0,
+                    "stability": 0.9
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "decay_cart_items",
+      "name": "Decay cart items over time",
+      "input": {
+        "species": "CartItem"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.1
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    },
+    {
+      "id": "decay_recommendation",
+      "name": "Decay recommendations over time",
+      "input": {
+        "species": "Recommendation"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.05
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    },
+    {
+      "id": "decay_abandoned_cart",
+      "name": "Decay abandoned cart records over time",
+      "input": {
+        "species": "AbandonedCart"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.05
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    }
+  ]
+}

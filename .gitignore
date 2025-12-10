@@ -51,3 +51,5 @@ achemdb-server
 !cmd/achemdb-server/
 demo
 !cmd/demo/
+achemdb-sim
+!cmd/achemdb-sim/

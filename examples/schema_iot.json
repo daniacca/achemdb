@@ -1,0 +1,257 @@
+{
+  "name": "iot-system",
+  "species": [
+    {
+      "name": "SensorReading",
+      "description": "Raw sensor readings from IoT devices"
+    },
+    {
+      "name": "Threshold",
+      "description": "Threshold values for sensors"
+    },
+    {
+      "name": "Alert",
+      "description": "Alerts triggered by sensor readings"
+    },
+    {
+      "name": "DeviceStatus",
+      "description": "Device health status"
+    },
+    {
+      "name": "Maintenance",
+      "description": "Maintenance requests"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "check_threshold",
+      "name": "Check sensor readings against thresholds",
+      "description": "Creates alerts when sensor readings exceed thresholds. Note: This is a simplified check that only verifies a threshold exists; in practice, you would compare the reading value against the threshold value.",
+      "input": {
+        "species": "SensorReading"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "if": {
+            "count_molecules": {
+              "species": "Threshold",
+              "where": {
+                "sensor_id": { "eq": "$m.sensor_id" }
+              },
+              "op": { "gte": 1 }
+            }
+          },
+          "then": [
+            {
+              "if": {
+                "count_molecules": {
+                  "species": "Alert",
+                  "where": {
+                    "sensor_id": { "eq": "$m.sensor_id" },
+                    "device_id": { "eq": "$m.device_id" }
+                  },
+                  "op": { "lt": 3 }
+                }
+              },
+              "then": [
+                {
+                  "create": {
+                    "species": "Alert",
+                    "payload": {
+                      "sensor_id": "$m.sensor_id",
+                      "value": "$m.value",
+                      "threshold_exceeded": true,
+                      "device_id": "$m.device_id"
+                    },
+                    "energy": 2.0,
+                    "stability": 1.0
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "update_device_status",
+      "name": "Update device status based on readings",
+      "input": {
+        "species": "SensorReading"
+      },
+      "rate": 0.8,
+      "effects": [
+        {
+          "if": {
+            "count_molecules": {
+              "species": "DeviceStatus",
+              "where": {
+                "device_id": { "eq": "$m.device_id" }
+              },
+              "op": { "eq": 0 }
+            }
+          },
+          "then": [
+            {
+              "create": {
+                "species": "DeviceStatus",
+                "payload": {
+                  "device_id": "$m.device_id",
+                  "sensor_id": "$m.sensor_id",
+                  "status": "active",
+                  "last_reading": "$m.value",
+                  "timestamp": "$m.created_at"
+                },
+                "energy": 1.0,
+                "stability": 0.9
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alert_to_maintenance",
+      "name": "Convert multiple alerts to maintenance request",
+      "input": {
+        "species": "Alert"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "if": {
+            "count_molecules": {
+              "species": "Alert",
+              "where": {
+                "device_id": { "eq": "$m.device_id" }
+              },
+              "op": { "gte": 5 }
+            }
+          },
+          "then": [
+            {
+              "if": {
+                "count_molecules": {
+                  "species": "Maintenance",
+                  "where": {
+                    "device_id": { "eq": "$m.device_id" }
+                  },
+                  "op": { "eq": 0 }
+                }
+              },
+              "then": [
+                {
+                  "create": {
+                    "species": "Maintenance",
+                    "payload": {
+                      "device_id": "$m.device_id",
+                      "priority": "high",
+                      "alert_count": 5,
+                      "reason": "multiple_threshold_exceeded"
+                    },
+                    "energy": 3.0,
+                    "stability": 1.0
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "decay_sensor_reading",
+      "name": "Decay old sensor readings",
+      "input": {
+        "species": "SensorReading"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.2
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    },
+    {
+      "id": "decay_device_status",
+      "name": "Decay device status over time",
+      "input": {
+        "species": "DeviceStatus"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.1
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    },
+    {
+      "id": "decay_alert",
+      "name": "Decay alerts over time",
+      "input": {
+        "species": "Alert"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.15
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    },
+    {
+      "id": "decay_maintenance",
+      "name": "Decay maintenance requests over time",
+      "input": {
+        "species": "Maintenance"
+      },
+      "rate": 1.0,
+      "effects": [
+        {
+          "update": {
+            "energy_add": -0.05
+          }
+        },
+        {
+          "if": {
+            "field": "energy",
+            "op": "lte",
+            "value": 0.0
+          },
+          "then": [{ "consume": true }]
+        }
+      ]
+    }
+  ]
+}
+
