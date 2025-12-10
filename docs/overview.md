@@ -153,3 +153,4 @@ Later versions of AChemDB will support **snapshots** and **persistence** to make
 - [DSL reference](./dsl.md) – JSON structures for schemas and reactions.
 - [HTTP API](./http-api.md) – how to run AChemDB as a server.
 - [Notifications](./notifications.md) – how to receive events when reactions fire.
+- [Container & Docker reference](./docker.md) - how to run achemdb in a container.

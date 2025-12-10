@@ -455,9 +455,13 @@ Throughout the DSL, you can reference molecule fields using `$m.field` syntax:
 - `$m.stability` – molecule stability
 - `$m.id` – molecule ID
 - `$m.species` – molecule species
+- `$m.created_at` / `$m.createdAt` / `$m.CreatedAt` – environment time when the molecule was created
+- `$m.last_touched_at` / `$m.lastTouchedAt` / `$m.LastTouchedAt` – environment time when the molecule was last mutated
 - `$m.field` – payload field (e.g., `$m.ip`, `$m.type`)
 
 You can also use the shorthand form (without `$m.` prefix) for payload fields in some contexts, but `$m.field` is always supported and explicit.
+
+**Note:** Timestamp fields (`created_at` and `last_touched_at`) return numeric values (int64) representing the environment time when the molecule was created or last updated. These values can be used in payload creation, conditions, and comparisons.
 
 ### Examples
 

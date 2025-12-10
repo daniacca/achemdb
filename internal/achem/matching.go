@@ -15,6 +15,8 @@ func indexKeyFromValue(v any) string {
 //   - $m.stability
 //   - $m.id
 //   - $m.species
+//   - $m.created_at / $m.createdAt / $m.CreatedAt
+//   - $m.last_touched_at / $m.lastTouchedAt / $m.LastTouchedAt
 //   - $m.<payloadField>
 // Any non-string value is returned as-is.
 func resolveValueRef(val any, origin Molecule) any {
@@ -34,6 +36,10 @@ func resolveValueRef(val any, origin Molecule) any {
 			return string(origin.ID)
 		case "species":
 			return string(origin.Species)
+		case "created_at", "createdAt", "CreatedAt":
+			return origin.CreatedAt
+		case "last_touched_at", "lastTouchedAt", "LastTouchedAt":
+			return origin.LastTouchedAt
 		default:
 			// Otherwise, check payload
 			if v, ok := origin.Payload[field]; ok {

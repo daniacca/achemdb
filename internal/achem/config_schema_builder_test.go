@@ -369,9 +369,11 @@ func TestConfigReaction_FieldComparison_Operators(t *testing.T) {
 }
 
 func TestConfigReaction_ResolveValueFromMolecule(t *testing.T) {
-	mol := NewMolecule("Test", map[string]any{"ip": "192.168.1.1", "port": 8080}, 0)
+	mol := NewMolecule("Test", map[string]any{"ip": "192.168.1.1", "port": 8080}, 100)
 	mol.Energy = 5.0
 	mol.Stability = 0.8
+	mol.CreatedAt = 100
+	mol.LastTouchedAt = 200
 
 	testCases := []struct {
 		name     string
@@ -383,6 +385,12 @@ func TestConfigReaction_ResolveValueFromMolecule(t *testing.T) {
 		{"payload_ref_int", "$m.port", 8080},
 		{"energy_ref", "$m.energy", 5.0},
 		{"stability_ref", "$m.stability", 0.8},
+		{"created_at_snake", "$m.created_at", int64(100)},
+		{"created_at_camel", "$m.createdAt", int64(100)},
+		{"created_at_pascal", "$m.CreatedAt", int64(100)},
+		{"last_touched_at_snake", "$m.last_touched_at", int64(200)},
+		{"last_touched_at_camel", "$m.lastTouchedAt", int64(200)},
+		{"last_touched_at_pascal", "$m.LastTouchedAt", int64(200)},
 		{"non_string", 42, 42},
 		{"missing_field", "$m.missing", "$m.missing"},
 	}
@@ -877,6 +885,143 @@ func TestConfigReaction_Catalysts_Integration(t *testing.T) {
 
 	if effectiveRateWithCat <= effectiveRateNoCat {
 		t.Error("Expected effective rate to be higher with catalyst")
+	}
+}
+
+func TestConfigReaction_TimestampFieldInCreatePayload(t *testing.T) {
+	cfg := ReactionConfig{
+		ID:   "test-timestamp",
+		Name: "Test Timestamp in Create",
+		Input: InputConfig{
+			Species: "Input",
+		},
+		Rate: 1.0,
+		Effects: []EffectConfig{
+			{
+				Create: &CreateEffectConfig{
+					Species: "Output",
+					Payload: map[string]any{
+						"timestamp":      "$m.created_at",
+						"last_touched":   "$m.last_touched_at",
+						"createdAt":      "$m.createdAt",
+						"lastTouchedAt":   "$m.lastTouchedAt",
+					},
+				},
+			},
+		},
+	}
+
+	reaction := &ConfigReaction{cfg: cfg}
+	schema := NewSchema("test").WithReactions(reaction)
+	env := NewEnvironment(schema)
+
+	// Create input molecule with known timestamps
+	inputMol := NewMolecule("Input", nil, 100)
+	inputMol.CreatedAt = 100
+	inputMol.LastTouchedAt = 200
+	env.Insert(inputMol)
+
+	env.Step()
+
+	molecules := env.AllMolecules()
+	outputFound := false
+	for _, m := range molecules {
+		if m.Species == "Output" {
+			outputFound = true
+			// Check that timestamp fields were resolved correctly
+			if timestamp, ok := m.Payload["timestamp"].(int64); !ok || timestamp != 100 {
+				t.Errorf("Expected timestamp=100, got %v", m.Payload["timestamp"])
+			}
+			if lastTouched, ok := m.Payload["last_touched"].(int64); !ok || lastTouched != 200 {
+				t.Errorf("Expected last_touched=200, got %v", m.Payload["last_touched"])
+			}
+			if createdAt, ok := m.Payload["createdAt"].(int64); !ok || createdAt != 100 {
+				t.Errorf("Expected createdAt=100, got %v", m.Payload["createdAt"])
+			}
+			if lastTouchedAt, ok := m.Payload["lastTouchedAt"].(int64); !ok || lastTouchedAt != 200 {
+				t.Errorf("Expected lastTouchedAt=200, got %v", m.Payload["lastTouchedAt"])
+			}
+		}
+	}
+
+	if !outputFound {
+		t.Error("Expected Output molecule to be created")
+	}
+}
+
+func TestConfigReaction_TimestampFieldInCondition(t *testing.T) {
+	cfg := ReactionConfig{
+		ID:   "test-timestamp-condition",
+		Name: "Test Timestamp in Condition",
+		Input: InputConfig{
+			Species: "Input",
+		},
+		Rate: 1.0,
+		Effects: []EffectConfig{
+			{
+				If: &IfConditionConfig{
+					Field: "created_at",
+					Op:    "gt",
+					Value: 50,
+				},
+				Then: []EffectConfig{
+					{
+						Create: &CreateEffectConfig{
+							Species: "Output",
+							Payload: map[string]any{
+								"source_created_at": "$m.created_at",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	reaction := &ConfigReaction{cfg: cfg}
+	schema := NewSchema("test").WithReactions(reaction)
+	env := NewEnvironment(schema)
+
+	// Create input molecule with CreatedAt > 50
+	inputMol := NewMolecule("Input", nil, 100)
+	inputMol.CreatedAt = 100
+	env.Insert(inputMol)
+
+	env.Step()
+
+	molecules := env.AllMolecules()
+	outputFound := false
+	for _, m := range molecules {
+		if m.Species == "Output" {
+			outputFound = true
+			if sourceCreatedAt, ok := m.Payload["source_created_at"].(int64); !ok || sourceCreatedAt != 100 {
+				t.Errorf("Expected source_created_at=100, got %v", m.Payload["source_created_at"])
+			}
+		}
+	}
+
+	if !outputFound {
+		t.Error("Expected Output molecule to be created when condition is met")
+	}
+
+	// Test with CreatedAt <= 50 (should not create output)
+	env2 := NewEnvironment(schema)
+	inputMol2 := NewMolecule("Input", nil, 30)
+	inputMol2.CreatedAt = 30
+	env2.Insert(inputMol2)
+
+	env2.Step()
+
+	molecules2 := env2.AllMolecules()
+	outputFound2 := false
+	for _, m := range molecules2 {
+		if m.Species == "Output" {
+			outputFound2 = true
+		}
+	}
+
+	if outputFound2 {
+		t.Error("Expected no Output molecule when condition is not met")
 	}
 }
 

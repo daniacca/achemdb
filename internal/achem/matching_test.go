@@ -99,6 +99,48 @@ func TestResolveValueRef(t *testing.T) {
 	}
 }
 
+func TestResolveValueRef_TimestampFields(t *testing.T) {
+	mol := NewMolecule("Test", map[string]any{"value": 42}, 100)
+	mol.CreatedAt = 100
+	mol.LastTouchedAt = 200
+	
+	// Test $m.created_at (snake_case)
+	result := resolveValueRef("$m.created_at", mol)
+	if result != int64(100) {
+		t.Errorf("Expected 100, got %v", result)
+	}
+	
+	// Test $m.createdAt (camelCase)
+	result = resolveValueRef("$m.createdAt", mol)
+	if result != int64(100) {
+		t.Errorf("Expected 100, got %v", result)
+	}
+	
+	// Test $m.CreatedAt (PascalCase)
+	result = resolveValueRef("$m.CreatedAt", mol)
+	if result != int64(100) {
+		t.Errorf("Expected 100, got %v", result)
+	}
+	
+	// Test $m.last_touched_at (snake_case)
+	result = resolveValueRef("$m.last_touched_at", mol)
+	if result != int64(200) {
+		t.Errorf("Expected 200, got %v", result)
+	}
+	
+	// Test $m.lastTouchedAt (camelCase)
+	result = resolveValueRef("$m.lastTouchedAt", mol)
+	if result != int64(200) {
+		t.Errorf("Expected 200, got %v", result)
+	}
+	
+	// Test $m.LastTouchedAt (PascalCase)
+	result = resolveValueRef("$m.LastTouchedAt", mol)
+	if result != int64(200) {
+		t.Errorf("Expected 200, got %v", result)
+	}
+}
+
 func TestMatchWhere(t *testing.T) {
 	origin := NewMolecule("Origin", map[string]any{
 		"value": 100,

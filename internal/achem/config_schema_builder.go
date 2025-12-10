@@ -95,7 +95,7 @@ func resolveValueFromMolecule(val any, m Molecule) any {
 }
 
 // getFieldValue retrieves a field value from a molecule
-// Supports "energy", "stability", "id", "species", or payload fields
+// Supports "energy", "stability", "id", "species", timestamp fields, or payload fields
 func getFieldValue(field string, m Molecule) (any, bool) {
 	switch field {
 	case "energy":
@@ -106,6 +106,10 @@ func getFieldValue(field string, m Molecule) (any, bool) {
 		return string(m.ID), true
 	case "species":
 		return string(m.Species), true
+	case "created_at", "createdAt", "CreatedAt":
+		return m.CreatedAt, true
+	case "last_touched_at", "lastTouchedAt", "LastTouchedAt":
+		return m.LastTouchedAt, true
 	default:
 		// Check if it's a payload field reference like "$m.field"
 		if len(field) > 3 && field[:3] == "$m." {
