@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -64,18 +63,40 @@ type NotificationManager struct {
 	jobs      chan notificationJob
 	closed    bool
 	wg        sync.WaitGroup
+	logger    Logger
 }
 
-// NewNotificationManager creates a new notification manager
+// NewNotificationManager creates a new notification manager.
+// If logger is nil, a NoOpLogger will be used.
 func NewNotificationManager() *NotificationManager {
+	return NewNotificationManagerWithLogger(nil)
+}
+
+// NewNotificationManagerWithLogger creates a new notification manager with the given logger.
+// If logger is nil, a NoOpLogger will be used.
+func NewNotificationManagerWithLogger(logger Logger) *NotificationManager {
+	if logger == nil {
+		logger = NewNoOpLogger()
+	}
 	mgr := &NotificationManager{
 		notifiers: make(map[string]Notifier),
 		jobs:      make(chan notificationJob, 1024),
 		closed:    false,
 		callbacks: make(map[string]func(NotificationEvent)),
+		logger:    logger,
 	}
 	mgr.startWorkers(1)
 	return mgr
+}
+
+// SetLogger sets the logger for this notification manager
+func (nm *NotificationManager) SetLogger(logger Logger) {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+	if logger == nil {
+		logger = NewNoOpLogger()
+	}
+	nm.logger = logger
 }
 
 // RegisterNotifier registers a notifier with the manager
@@ -183,7 +204,7 @@ func (nm *NotificationManager) Enqueue(event NotificationEvent, notifierIDs []st
 	select {
 	case nm.jobs <- notificationJob{Event: event, NotifierIDs: notifierIDs}:
 	default:
-		log.Printf("notification queue full, dropping notification: reaction_id=%s", event.ReactionID)
+		nm.logger.Warnf("notification queue full, dropping notification: reaction_id=%s", event.ReactionID)
 	}
 }
 
@@ -228,7 +249,7 @@ func (nm *NotificationManager) notifyWithRetry(ctx context.Context, notifierID s
 	nm.mu.RUnlock()
 	
 	if !ok {
-		log.Printf("notification failed: notifier=%s error=notifier not found", notifierID)
+		nm.logger.Errorf("notification failed: notifier=%s error=notifier not found", notifierID)
 		return
 	}
 	
@@ -243,11 +264,11 @@ func (nm *NotificationManager) notifyWithRetry(ctx context.Context, notifierID s
 		}
 		
 		// Log the failure
-		log.Printf("notification failed: notifier=%s attempt=%d error=%v", notifierID, attempt+1, err)
+		nm.logger.Warnf("notification failed: notifier=%s attempt=%d error=%v", notifierID, attempt+1, err)
 		
 		if attempt == maxRetries {
 			// Max retries reached, give up
-			log.Printf("notification failed after %d attempts: notifier=%s", maxRetries+1, notifierID)
+			nm.logger.Errorf("notification failed after %d attempts: notifier=%s", maxRetries+1, notifierID)
 			return
 		}
 		

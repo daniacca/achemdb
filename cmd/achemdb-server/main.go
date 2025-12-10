@@ -6,35 +6,6 @@ import (
 	"github.com/daniacca/achemdb/internal/achem"
 )
 
-// Server represents the HTTP server for AChemDB
-type Server struct {
-	manager           *achem.EnvironmentManager
-	globalNotifierMgr *achem.NotificationManager
-	snapshotDir       string
-	snapshotEveryTicks int
-	logger            *Logger
-}
-
-// NewServer creates a new server instance
-func NewServer(logger *Logger) *Server {
-	globalMgr := achem.NewNotificationManager()
-	return &Server{
-		manager:           achem.NewEnvironmentManager(),
-		globalNotifierMgr: globalMgr,
-		logger:            logger,
-	}
-}
-
-// SetSnapshotDir sets the snapshot directory for all environments
-func (s *Server) SetSnapshotDir(dir string) {
-	s.snapshotDir = dir
-}
-
-// SetSnapshotEveryTicks sets the snapshot frequency for all environments
-func (s *Server) SetSnapshotEveryTicks(ticks int) {
-	s.snapshotEveryTicks = ticks
-}
-
 func main() {
 	cfg := loadServerConfig()
 

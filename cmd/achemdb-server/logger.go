@@ -66,61 +66,61 @@ func (l *Logger) shouldLog(level LogLevel) bool {
 }
 
 // Debugf logs a debug message
-func (l *Logger) Debugf(format string, v ...interface{}) {
+func (l *Logger) Debugf(format string, v ...any) {
 	if l.shouldLog(LogLevelDebug) {
 		log.Printf("[DEBUG] "+format, v...)
 	}
 }
 
 // Infof logs an info message
-func (l *Logger) Infof(format string, v ...interface{}) {
+func (l *Logger) Infof(format string, v ...any) {
 	if l.shouldLog(LogLevelInfo) {
 		log.Printf("[INFO] "+format, v...)
 	}
 }
 
 // Warnf logs a warning message
-func (l *Logger) Warnf(format string, v ...interface{}) {
+func (l *Logger) Warnf(format string, v ...any) {
 	if l.shouldLog(LogLevelWarn) {
 		log.Printf("[WARN] "+format, v...)
 	}
 }
 
 // Errorf logs an error message
-func (l *Logger) Errorf(format string, v ...interface{}) {
+func (l *Logger) Errorf(format string, v ...any) {
 	if l.shouldLog(LogLevelError) {
 		log.Printf("[ERROR] "+format, v...)
 	}
 }
 
 // Fatalf logs an error message and exits
-func (l *Logger) Fatalf(format string, v ...interface{}) {
+func (l *Logger) Fatalf(format string, v ...any) {
 	log.Fatalf("[FATAL] "+format, v...)
 }
 
 // Debug logs a debug message
-func (l *Logger) Debug(v ...interface{}) {
+func (l *Logger) Debug(v ...any) {
 	if l.shouldLog(LogLevelDebug) {
 		log.Print("[DEBUG] ", fmt.Sprint(v...))
 	}
 }
 
 // Info logs an info message
-func (l *Logger) Info(v ...interface{}) {
+func (l *Logger) Info(v ...any) {
 	if l.shouldLog(LogLevelInfo) {
 		log.Print("[INFO] ", fmt.Sprint(v...))
 	}
 }
 
 // Warn logs a warning message
-func (l *Logger) Warn(v ...interface{}) {
+func (l *Logger) Warn(v ...any) {
 	if l.shouldLog(LogLevelWarn) {
 		log.Print("[WARN] ", fmt.Sprint(v...))
 	}
 }
 
 // Error logs an error message
-func (l *Logger) Error(v ...interface{}) {
+func (l *Logger) Error(v ...any) {
 	if l.shouldLog(LogLevelError) {
 		log.Print("[ERROR] ", fmt.Sprint(v...))
 	}

@@ -2,7 +2,6 @@ package achem
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -26,11 +25,23 @@ type Environment struct {
 	snapshotDir       string
 	snapshotEveryNTicks int
 	snapshotMu        sync.Mutex
+	logger            Logger
 }
 
 // NewEnvironment creates a new environment with the given schema.
 // The environment starts at time 0 with no molecules.
+// If logger is nil, a NoOpLogger will be used.
 func NewEnvironment(schema *Schema) *Environment {
+	return NewEnvironmentWithLogger(schema, nil)
+}
+
+// NewEnvironmentWithLogger creates a new environment with the given schema and logger.
+// The environment starts at time 0 with no molecules.
+// If logger is nil, a NoOpLogger will be used.
+func NewEnvironmentWithLogger(schema *Schema, logger Logger) *Environment {
+	if logger == nil {
+		logger = NewNoOpLogger()
+	}
 	return &Environment{
 		schema:            schema,
 		mols:              make(map[MoleculeID]Molecule),
@@ -38,9 +49,22 @@ func NewEnvironment(schema *Schema) *Environment {
 		time:              0,
 		stopCh:            make(chan struct{}),
 		isRunning:         false,
-		notifierMgr:       NewNotificationManager(),
+		notifierMgr:       NewNotificationManagerWithLogger(logger),
 		snapshotEveryNTicks: 1000, // default value
+		logger:            logger,
 	}
+}
+
+// SetLogger sets the logger for this environment
+func (e *Environment) SetLogger(logger Logger) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if logger == nil {
+		logger = NewNoOpLogger()
+	}
+	e.logger = logger
+	// Also update the notification manager's logger
+	e.notifierMgr.SetLogger(logger)
 }
 
 // SetEnvironmentID sets the environment ID (used for notifications)
@@ -502,14 +526,14 @@ func (e *Environment) SaveSnapshot() error {
 	// Create snapshot
 	snapshot, err := e.createSnapshot()
 	if err != nil {
-		log.Printf("snapshot failed: failed to create snapshot: %v", err)
+		e.logger.Errorf("snapshot failed: failed to create snapshot: %v", err)
 		return err
 	}
 
 	// Encode to JSON
 	data, err := EncodeSnapshotJSON(snapshot)
 	if err != nil {
-		log.Printf("snapshot failed: failed to encode snapshot: %v", err)
+		e.logger.Errorf("snapshot failed: failed to encode snapshot: %v", err)
 		return err
 	}
 
@@ -518,25 +542,25 @@ func (e *Environment) SaveSnapshot() error {
 
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		log.Printf("snapshot failed: failed to create snapshot directory: %v", err)
+		e.logger.Errorf("snapshot failed: failed to create snapshot directory: %v", err)
 		return err
 	}
 
 	// Write atomically using temp file + rename
 	tempPath := path + ".tmp"
 	if err := os.WriteFile(tempPath, data, 0644); err != nil {
-		log.Printf("snapshot failed: failed to write temp file: %v", err)
+		e.logger.Errorf("snapshot failed: failed to write temp file: %v", err)
 		return err
 	}
 
 	if err := os.Rename(tempPath, path); err != nil {
 		// Clean up temp file on error
 		os.Remove(tempPath)
-		log.Printf("snapshot failed: failed to rename temp file: %v", err)
+		e.logger.Errorf("snapshot failed: failed to rename temp file: %v", err)
 		return err
 	}
 
-	log.Printf("snapshot created: env_id=%s time=%d molecules=%d path=%s", snapshot.EnvironmentID, snapshot.Time, len(snapshot.Molecules), path)
+	e.logger.Infof("snapshot created: env_id=%s time=%d molecules=%d path=%s", snapshot.EnvironmentID, snapshot.Time, len(snapshot.Molecules), path)
 	return nil
 }
 
@@ -604,6 +628,6 @@ func (e *Environment) LoadSnapshot() error {
 		e.mols[m.ID] = m
 	}
 
-	log.Printf("snapshot loaded: env_id=%s time=%d molecules=%d path=%s", snapshot.EnvironmentID, snapshot.Time, len(snapshot.Molecules), path)
+	e.logger.Infof("snapshot loaded: env_id=%s time=%d molecules=%d path=%s", snapshot.EnvironmentID, snapshot.Time, len(snapshot.Molecules), path)
 	return nil
 }

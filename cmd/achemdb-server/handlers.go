@@ -68,9 +68,13 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Environment already exists, update its schema
 		if err := s.manager.UpdateEnvironmentSchema(envID, schema); err != nil {
+			s.logger.Errorf("Failed to update environment schema: env_id=%s error=%v", envID, err)
 			http.Error(w, "cannot update environment: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		s.logger.Infof("Environment schema updated: env_id=%s schema_name=%s", envID, cfg.Name)
+	} else {
+		s.logger.Infof("Environment created: env_id=%s schema_name=%s", envID, cfg.Name)
 	}
 
 	// Set the notification manager and snapshot config for the environment
@@ -121,6 +125,8 @@ func (s *Server) handleInsertMolecule(w http.ResponseWriter, r *http.Request) {
 
 	m := achem.NewMolecule(achem.SpeciesName(req.Species), req.Payload, 0)
 	env.Insert(m)
+
+	s.logger.Debugf("Molecule inserted: env_id=%s species=%s", envID, req.Species)
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
@@ -174,6 +180,8 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	env.Run(interval)
+	s.logger.Infof("Environment started: env_id=%s interval=%v", envID, interval)
+
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("environment started"))
 }
@@ -194,6 +202,8 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	env.Stop()
+	s.logger.Infof("Environment stopped: env_id=%s", envID)
+
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("environment stopped"))
 }
@@ -249,9 +259,12 @@ func (s *Server) handleDeleteEnvironment(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := s.manager.DeleteEnvironment(envID); err != nil {
+		s.logger.Warnf("Failed to delete environment: env_id=%s error=%v", envID, err)
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+
+	s.logger.Infof("Environment deleted: env_id=%s", envID)
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("environment deleted"))
@@ -438,12 +451,14 @@ func (s *Server) handleSaveSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	// Save snapshot synchronously
 	if err := env.SaveSnapshot(); err != nil {
+		s.logger.Errorf("Failed to save snapshot: env_id=%s error=%v", envID, err)
 		http.Error(w, "failed to save snapshot: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Get snapshot path for response
 	path := env.SnapshotPath()
+	s.logger.Debugf("Snapshot saved: env_id=%s path=%s", envID, path)
 
 	response := map[string]string{
 		"status": "ok",

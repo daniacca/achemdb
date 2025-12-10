@@ -12,13 +12,35 @@ type EnvironmentID string
 type EnvironmentManager struct {
 	mu          sync.RWMutex
 	environments map[EnvironmentID]*Environment
+	logger      Logger
 }
 
-// NewEnvironmentManager creates a new environment manager
+// NewEnvironmentManager creates a new environment manager.
+// If logger is nil, a NoOpLogger will be used.
 func NewEnvironmentManager() *EnvironmentManager {
+	return NewEnvironmentManagerWithLogger(nil)
+}
+
+// NewEnvironmentManagerWithLogger creates a new environment manager with the given logger.
+// If logger is nil, a NoOpLogger will be used.
+func NewEnvironmentManagerWithLogger(logger Logger) *EnvironmentManager {
+	if logger == nil {
+		logger = NewNoOpLogger()
+	}
 	return &EnvironmentManager{
 		environments: make(map[EnvironmentID]*Environment),
+		logger:      logger,
 	}
+}
+
+// SetLogger sets the logger for this environment manager
+func (em *EnvironmentManager) SetLogger(logger Logger) {
+	em.mu.Lock()
+	defer em.mu.Unlock()
+	if logger == nil {
+		logger = NewNoOpLogger()
+	}
+	em.logger = logger
 }
 
 // CreateEnvironment creates a new environment with the given ID and schema
@@ -32,7 +54,7 @@ func (em *EnvironmentManager) CreateEnvironment(id EnvironmentID, schema *Schema
 		return fmt.Errorf("environment with id %s already exists", id)
 	}
 
-	env := NewEnvironment(schema)
+	env := NewEnvironmentWithLogger(schema, em.logger)
 	env.SetEnvironmentID(id)
 	
 	// Attempt to load snapshot (no-op if snapshot doesn't exist)
