@@ -93,16 +93,13 @@ go install github.com/daniacca/achemdb/cmd/achemdb-server@latest
 
 #### Docker
 
+You can run AChemDB as a standalone server using the official Docker image:
+
 ```bash
 docker run -p 8080:8080 daniacca/achemdb:latest
 ```
 
-Or build from source:
-
-```bash
-docker build -t daniacca/achemdb:latest .
-docker run -p 8080:8080 daniacca/achemdb:latest
-```
+For advanced configuration (env vars, snapshots, docker-compose examples), see [docs/docker.md](./docs/docker.md).
 
 ### 1. Start the server
 

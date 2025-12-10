@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  achemdb:
+    image: daniacca/achemdb:latest
+    container_name: achemdb
+    ports:
+      - "8080:8080"
+    environment:
+      # HTTP listen address (inside the container)
+      ACHEMDB_ADDR: ":8080"
+
+      # Default environment ID used at startup
+      ACHEMDB_ENV_ID: "production"
+
+      # Optional: load an initial schema at startup
+      # (this file will be mounted via volume below)
+      ACHEMDB_SCHEMA_FILE: "/config/schema.json"
+
+      # Snapshot configuration
+      ACHEMDB_SNAPSHOT_DIR: "/data"
+      ACHEMDB_SNAPSHOT_EVERY_TICKS: "1000"
+
+      # Log level: debug, info, warn, error
+      ACHEMDB_LOG_LEVEL: "info"
+
+    volumes:
+      # Persist snapshots on the host
+      - ./data:/data
+      # Mount a schema file from the host
+      - ./config/schema.json:/config/schema.json:ro

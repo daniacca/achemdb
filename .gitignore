@@ -46,5 +46,8 @@ go.work
 coverage/
 bin/
 
+# Project executables
 achemdb-server
+!cmd/achemdb-server/
 demo
+!cmd/demo/
