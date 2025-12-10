@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   achemdb:
-    image: daniacca/achemdb:latest
+    image: kaelisra/achemdb:latest
     container_name: achemdb
     ports:
       - "8080:8080"

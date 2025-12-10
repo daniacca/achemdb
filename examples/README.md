@@ -97,7 +97,7 @@ services:
 docker run -p 8080:8080 \
   -v $(pwd)/test-data/schema_security.json:/config/schema.json:ro \
   -e ACHEMDB_SCHEMA_FILE=/config/schema.json \
-  daniacca/achemdb:latest
+  kaelisra/achemdb:latest
 ```
 
 ## Schema Format

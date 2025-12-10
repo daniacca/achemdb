@@ -9,7 +9,7 @@ AChemDB can be run as a containerized server using Docker or Docker Compose. Thi
 Run the official image directly:
 
 ```bash
-docker run -p 8080:8080 daniacca/achemdb:latest
+docker run -p 8080:8080 kaelisra/achemdb:latest
 ```
 
 This starts AChemDB on port 8080 with default settings. The server will be accessible at `http://localhost:8080`.
@@ -39,7 +39,7 @@ HTTP listen address inside the container.
 - **Description**: The address and port the server listens on inside the container. Typically `:8080` for containerized deployments.
 
 ```bash
-docker run -p 8080:8080 -e ACHEMDB_ADDR=":8080" daniacca/achemdb:latest
+docker run -p 8080:8080 -e ACHEMDB_ADDR=":8080" kaelisra/achemdb:latest
 ```
 
 #### `ACHEMDB_ENV_ID`
@@ -51,7 +51,7 @@ Default environment ID used when loading an initial schema at startup.
 - **Description**: When `ACHEMDB_SCHEMA_FILE` is set, this environment ID is used to create/update the environment with the loaded schema.
 
 ```bash
-docker run -p 8080:8080 -e ACHEMDB_ENV_ID="production" daniacca/achemdb:latest
+docker run -p 8080:8080 -e ACHEMDB_ENV_ID="production" kaelisra/achemdb:latest
 ```
 
 #### `ACHEMDB_SCHEMA_FILE`
@@ -67,7 +67,7 @@ docker run -p 8080:8080 \
   -e ACHEMDB_SCHEMA_FILE="/config/schema.json" \
   -e ACHEMDB_ENV_ID="production" \
   -v $(pwd)/config/schema.json:/config/schema.json:ro \
-  daniacca/achemdb:latest
+  kaelisra/achemdb:latest
 ```
 
 #### `ACHEMDB_SNAPSHOT_DIR`
@@ -82,7 +82,7 @@ Directory where environment snapshots are stored.
 docker run -p 8080:8080 \
   -e ACHEMDB_SNAPSHOT_DIR="/data" \
   -v $(pwd)/data:/data \
-  daniacca/achemdb:latest
+  kaelisra/achemdb:latest
 ```
 
 #### `ACHEMDB_SNAPSHOT_EVERY_TICKS`
@@ -96,7 +96,7 @@ How often to write snapshots (in number of ticks).
 ```bash
 docker run -p 8080:8080 \
   -e ACHEMDB_SNAPSHOT_EVERY_TICKS="500" \
-  daniacca/achemdb:latest
+  kaelisra/achemdb:latest
 ```
 
 #### `ACHEMDB_LOG_LEVEL`
@@ -108,7 +108,7 @@ Log level for server output.
 - **Description**: Controls the verbosity of server logs. Case-insensitive.
 
 ```bash
-docker run -p 8080:8080 -e ACHEMDB_LOG_LEVEL="debug" daniacca/achemdb:latest
+docker run -p 8080:8080 -e ACHEMDB_LOG_LEVEL="debug" kaelisra/achemdb:latest
 ```
 
 ## Docker Compose Example
@@ -120,7 +120,7 @@ version: "3.9"
 
 services:
   achemdb:
-    image: daniacca/achemdb:latest
+    image: kaelisra/achemdb:latest
     container_name: achemdb
     ports:
       - "8080:8080"
@@ -195,16 +195,19 @@ See the [DSL Reference](./dsl.md) for complete schema syntax.
 1. **Create the schema file** (see above)
 
 2. **Start the service**:
+
    ```bash
    docker-compose up -d
    ```
 
 3. **Check logs**:
+
    ```bash
    docker-compose logs -f achemdb
    ```
 
 4. **Stop the service**:
+
    ```bash
    docker-compose down
    ```
@@ -258,7 +261,7 @@ Change the port mapping:
 
 ```yaml
 ports:
-  - "9090:8080"  # Access via localhost:9090
+  - "9090:8080" # Access via localhost:9090
 ```
 
 ### Skip Initial Schema Loading
@@ -309,6 +312,7 @@ docker-compose logs achemdb
 ```
 
 Common issues:
+
 - Invalid schema file (if `ACHEMDB_SCHEMA_FILE` is set)
 - Port already in use (change the host port in `docker-compose.yml`)
 - Permission issues with volume mounts
@@ -325,6 +329,7 @@ docker-compose up -d
 ### Schema file not found
 
 If `ACHEMDB_SCHEMA_FILE` is set but the file doesn't exist, the server will fail to start. Either:
+
 - Create the schema file at the specified path
 - Remove `ACHEMDB_SCHEMA_FILE` from the environment variables
 
@@ -333,9 +338,8 @@ If `ACHEMDB_SCHEMA_FILE` is set but the file doesn't exist, the server will fail
 To build the Docker image from source:
 
 ```bash
-docker build -t daniacca/achemdb:latest .
-docker run -p 8080:8080 daniacca/achemdb:latest
+docker build -t kaelisra/achemdb:latest .
+docker run -p 8080:8080 kaelisra/achemdb:latest
 ```
 
 See the `Dockerfile` in the repository root for build details.
-
