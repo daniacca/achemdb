@@ -1,0 +1,73 @@
+[
+  {
+    "species": "Metric",
+    "payload": {
+      "name": "cpu_usage",
+      "value": 45.0
+    }
+  },
+  {
+    "species": "Metric",
+    "payload": {
+      "name": "cpu_usage",
+      "value": 85.0
+    }
+  },
+  {
+    "species": "Metric",
+    "payload": {
+      "name": "cpu_usage",
+      "value": 90.0
+    }
+  },
+  {
+    "species": "Metric",
+    "payload": {
+      "name": "cpu_usage",
+      "value": 92.0
+    }
+  },
+  {
+    "species": "Metric",
+    "payload": {
+      "name": "memory_usage",
+      "value": 60.0
+    }
+  },
+  {
+    "species": "Metric",
+    "payload": {
+      "name": "memory_usage",
+      "value": 88.0
+    }
+  },
+  {
+    "species": "Metric",
+    "payload": {
+      "name": "memory_usage",
+      "value": 91.0
+    }
+  },
+  {
+    "species": "Metric",
+    "payload": {
+      "name": "disk_io",
+      "value": 30.0
+    }
+  },
+  {
+    "species": "Metric",
+    "payload": {
+      "name": "disk_io",
+      "value": 75.0
+    }
+  },
+  {
+    "species": "Metric",
+    "payload": {
+      "name": "disk_io",
+      "value": 89.0
+    }
+  }
+]
+

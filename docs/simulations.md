@@ -29,14 +29,15 @@ Run a simulation with a schema file:
 
 ```bash
 go run ./cmd/achemdb-sim \
-  --schema-file=examples/schema_security.json \
-  --ticks=200
+  --schema-file=examples/schema/security.json \
+  --ticks=10
 ```
 
 This will:
+
 1. Load and validate the schema
 2. Create an environment
-3. Run 200 simulation ticks
+3. Run 10 simulation ticks
 4. Print a summary of molecule counts per species
 
 ### With Seed Molecules
@@ -45,9 +46,9 @@ You can seed the environment with initial molecules from a JSON file:
 
 ```bash
 go run ./cmd/achemdb-sim \
-  --schema-file=examples/schema_security.json \
-  --ticks=200 \
-  --seed=examples/seeds_security.json
+  --schema-file=examples/schema/security.json \
+  --ticks=10 \
+  --seed=examples/seed/security.json
 ```
 
 The seed file format is a JSON array of molecules:
@@ -81,12 +82,17 @@ The seed file format is a JSON array of molecules:
 ### Example Output
 
 ```
-Simulation finished (schema=security-alerts, ticks=200)
+Simulation finished (schema=security-alerts, ticks=10)
 Species counts:
-  Alert: 1
-  Event: 0
-  Suspicion: 3
+  Event: 1
+  Suspicion: 5
 ```
+
+**Note:** The number of ticks matters! Molecules decay over time, so:
+
+- Too few ticks: Reactions may not have time to fire
+- Too many ticks: All molecules may decay away
+- Optimal range: 5-30 ticks depending on the schema (see schema-specific examples below)
 
 ## Automated Tests
 
@@ -108,22 +114,83 @@ go test ./internal/achem -v -run TestSimulation
 ```
 
 These tests serve as a regression harness to ensure:
+
 - Schemas remain stable and don't create infinite/unbounded molecule populations
 - Future changes to the DSL or engine don't break existing schemas
 - Decay and consumption patterns work correctly
 
+## Schema-Specific Examples
+
+Each schema has been tested with seed data. Here are working examples:
+
+### Security Schema
+
+```bash
+go run ./cmd/achemdb-sim \
+  --schema-file=examples/schema/security.json \
+  --ticks=10 \
+  --seed=examples/seed/security.json
+```
+
+**Optimal ticks:** 5-10 (Suspicion molecules decay after ~10 ticks)
+
+### Ecommerce Schema
+
+```bash
+go run ./cmd/achemdb-sim \
+  --schema-file=examples/schema/ecommerce.json \
+  --ticks=20 \
+  --seed=examples/seed/ecommerce.json
+```
+
+**Optimal ticks:** 5-30 (Shows CartItem → Purchase → Recommendation flow)
+
+### Monitoring Schema
+
+```bash
+go run ./cmd/achemdb-sim \
+  --schema-file=examples/schema/monitoring.json \
+  --ticks=10 \
+  --seed=examples/seed/monitoring.json
+```
+
+**Optimal ticks:** 5-30 (Shows Metric → Baseline → Anomaly → Incident progression)
+
+### IoT Schema
+
+```bash
+go run ./cmd/achemdb-sim \
+  --schema-file=examples/schema/iot.json \
+  --ticks=10 \
+  --seed=examples/seed/iot.json
+```
+
+**Optimal ticks:** 5-10 (Shows SensorReading → Alert → Maintenance flow)
+
+### Default Schema
+
+```bash
+go run ./cmd/achemdb-sim \
+  --schema-file=examples/schema/default.json \
+  --ticks=20 \
+  --seed=examples/seed/default.json
+```
+
+**Optimal ticks:** 5-20 (Shows Event → Processed transformation)
+
 ## Best Practices
 
-1. **Start Small**: Begin with a small number of ticks (50-100) to understand behavior
+1. **Start Small**: Begin with 5-10 ticks to see initial reactions, then increase to 20-30 for full progression
 2. **Use Seeds**: Seed files help you test specific scenarios and ensure reactions trigger
 3. **Monitor Counts**: Watch for species that grow unbounded - this indicates missing decay reactions or guard conditions
-4. **Iterate**: Adjust reaction rates and conditions based on simulation results
+4. **Adjust Ticks**: If you see empty results, try fewer ticks (molecules may have decayed). If you see only initial species, try more ticks.
+5. **Iterate**: Adjust reaction rates and conditions based on simulation results
 
 ## Limitations
 
 The simulation tool:
+
 - Runs in a single process (no HTTP server)
 - Doesn't support snapshots or persistence
 - Doesn't support notifications
 - Is intended for testing and development, not production workloads
-

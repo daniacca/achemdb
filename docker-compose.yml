@@ -27,5 +27,5 @@ services:
     volumes:
       # Persist snapshots on the host
       - ./data:/data
-      # Mount a schema file from the host (using test-data for testing)
-      - ./examples/schema.json:/config/schema.json:ro
+      # Mount a schema file from the host (using examples/schema for testing)
+      - ./examples/schema/default.json:/config/schema.json:ro

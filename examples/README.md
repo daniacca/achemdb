@@ -4,7 +4,7 @@ This directory contains example schema files for testing and development with AC
 
 ## Available Schemas
 
-### `schema.json` (Default)
+### `default.json` (Default)
 
 A simple default schema with basic event processing. Used by default in `docker-compose.yml`.
 
@@ -16,7 +16,7 @@ A simple default schema with basic event processing. Used by default in `docker-
 
 **Use Case:** General purpose testing and development
 
-### `schema_security.json`
+### `security.json`
 
 Security monitoring and alerting system.
 
@@ -28,7 +28,7 @@ Security monitoring and alerting system.
 
 **Use Case:** Security event processing, intrusion detection, anomaly detection
 
-### `schema_ecommerce.json`
+### `ecommerce.json`
 
 E-commerce system for tracking user behavior and purchases.
 
@@ -42,7 +42,7 @@ E-commerce system for tracking user behavior and purchases.
 
 **Use Case:** E-commerce analytics, recommendation systems, cart abandonment tracking
 
-### `schema_monitoring.json`
+### `monitoring.json`
 
 System monitoring and metrics processing.
 
@@ -55,7 +55,7 @@ System monitoring and metrics processing.
 
 **Use Case:** Infrastructure monitoring, anomaly detection, incident management
 
-### `schema_iot.json`
+### `iot.json`
 
 IoT device monitoring and maintenance system.
 
@@ -77,7 +77,7 @@ To use a different schema, update the volume mount in `docker-compose.yml`:
 
 ```yaml
 volumes:
-  - ./examples/schema_security.json:/config/schema.json:ro
+  - ./examples/schema/security.json:/config/schema.json:ro
 ```
 
 Or create a `docker-compose.override.yml`:
@@ -88,14 +88,14 @@ version: "3.9"
 services:
   achemdb:
     volumes:
-      - ./examples/schema_ecommerce.json:/config/schema.json:ro
+      - ./examples/schema/ecommerce.json:/config/schema.json:ro
 ```
 
 ### With Docker Run
 
 ```bash
 docker run -p 8080:8080 \
-  -v $(pwd)/test-data/schema_security.json:/config/schema.json:ro \
+  -v $(pwd)/examples/schema/security.json:/config/schema.json:ro \
   -e ACHEMDB_SCHEMA_FILE=/config/schema.json \
   kaelisra/achemdb:latest
 ```
@@ -153,14 +153,58 @@ These patterns ensure that example schemas remain stable and don't create unboun
 
 You can test these schemas using the `achemdb-sim` CLI tool. See the [Simulation Documentation](../docs/simulations.md) for details.
 
-Example:
+### Directory Structure
 
+The examples are organized into two subdirectories:
+
+- `schema/` - Contains all schema JSON files
+- `seed/` - Contains seed molecule JSON files for each schema
+
+### Working Examples
+
+Each schema has been tested with appropriate seed data. Here are working examples:
+
+**Security Schema:**
 ```bash
 go run ./cmd/achemdb-sim \
-  --schema-file=examples/schema_security.json \
-  --ticks=200 \
-  --seed=examples/seeds_security.json
+  --schema-file=examples/schema/security.json \
+  --ticks=10 \
+  --seed=examples/seed/security.json
 ```
+
+**Ecommerce Schema:**
+```bash
+go run ./cmd/achemdb-sim \
+  --schema-file=examples/schema/ecommerce.json \
+  --ticks=20 \
+  --seed=examples/seed/ecommerce.json
+```
+
+**Monitoring Schema:**
+```bash
+go run ./cmd/achemdb-sim \
+  --schema-file=examples/schema/monitoring.json \
+  --ticks=10 \
+  --seed=examples/seed/monitoring.json
+```
+
+**IoT Schema:**
+```bash
+go run ./cmd/achemdb-sim \
+  --schema-file=examples/schema/iot.json \
+  --ticks=10 \
+  --seed=examples/seed/iot.json
+```
+
+**Default Schema:**
+```bash
+go run ./cmd/achemdb-sim \
+  --schema-file=examples/schema/default.json \
+  --ticks=20 \
+  --seed=examples/seed/default.json
+```
+
+**Note:** The tick count is important! Too many ticks will cause all molecules to decay away. The optimal range is typically 5-30 ticks depending on the schema.
 
 ## Automated Testing
 

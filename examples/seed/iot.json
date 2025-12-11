@@ -1,0 +1,91 @@
+[
+  {
+    "species": "Threshold",
+    "payload": {
+      "sensor_id": "temp_sensor_1",
+      "device_id": "device_001",
+      "value": 80.0
+    }
+  },
+  {
+    "species": "Threshold",
+    "payload": {
+      "sensor_id": "pressure_sensor_1",
+      "device_id": "device_001",
+      "value": 100.0
+    }
+  },
+  {
+    "species": "Threshold",
+    "payload": {
+      "sensor_id": "temp_sensor_2",
+      "device_id": "device_002",
+      "value": 75.0
+    }
+  },
+  {
+    "species": "SensorReading",
+    "payload": {
+      "sensor_id": "temp_sensor_1",
+      "device_id": "device_001",
+      "value": 85.0
+    }
+  },
+  {
+    "species": "SensorReading",
+    "payload": {
+      "sensor_id": "temp_sensor_1",
+      "device_id": "device_001",
+      "value": 88.0
+    }
+  },
+  {
+    "species": "SensorReading",
+    "payload": {
+      "sensor_id": "temp_sensor_1",
+      "device_id": "device_001",
+      "value": 90.0
+    }
+  },
+  {
+    "species": "SensorReading",
+    "payload": {
+      "sensor_id": "temp_sensor_1",
+      "device_id": "device_001",
+      "value": 92.0
+    }
+  },
+  {
+    "species": "SensorReading",
+    "payload": {
+      "sensor_id": "temp_sensor_1",
+      "device_id": "device_001",
+      "value": 95.0
+    }
+  },
+  {
+    "species": "SensorReading",
+    "payload": {
+      "sensor_id": "pressure_sensor_1",
+      "device_id": "device_001",
+      "value": 105.0
+    }
+  },
+  {
+    "species": "SensorReading",
+    "payload": {
+      "sensor_id": "pressure_sensor_1",
+      "device_id": "device_001",
+      "value": 110.0
+    }
+  },
+  {
+    "species": "SensorReading",
+    "payload": {
+      "sensor_id": "temp_sensor_2",
+      "device_id": "device_002",
+      "value": 70.0
+    }
+  }
+]
+

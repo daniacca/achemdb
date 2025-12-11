@@ -1,0 +1,38 @@
+[
+  {
+    "species": "Event",
+    "payload": {
+      "type": "system_start",
+      "message": "System initialized"
+    }
+  },
+  {
+    "species": "Event",
+    "payload": {
+      "type": "user_action",
+      "message": "User logged in"
+    }
+  },
+  {
+    "species": "Event",
+    "payload": {
+      "type": "user_action",
+      "message": "User performed action"
+    }
+  },
+  {
+    "species": "Event",
+    "payload": {
+      "type": "error",
+      "message": "An error occurred"
+    }
+  },
+  {
+    "species": "Event",
+    "payload": {
+      "type": "warning",
+      "message": "Warning condition detected"
+    }
+  }
+]
+

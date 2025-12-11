@@ -1,0 +1,66 @@
+[
+  {
+    "species": "PageView",
+    "payload": {
+      "action": "add_to_cart",
+      "user_id": "user123",
+      "product_id": "prod_A",
+      "price": 29.99
+    }
+  },
+  {
+    "species": "PageView",
+    "payload": {
+      "action": "add_to_cart",
+      "user_id": "user123",
+      "product_id": "prod_B",
+      "price": 49.99
+    }
+  },
+  {
+    "species": "PageView",
+    "payload": {
+      "action": "add_to_cart",
+      "user_id": "user123",
+      "product_id": "prod_C",
+      "price": 19.99
+    }
+  },
+  {
+    "species": "PageView",
+    "payload": {
+      "action": "view",
+      "user_id": "user456",
+      "product_id": "prod_A",
+      "price": 29.99
+    }
+  },
+  {
+    "species": "PageView",
+    "payload": {
+      "action": "add_to_cart",
+      "user_id": "user456",
+      "product_id": "prod_D",
+      "price": 99.99
+    }
+  },
+  {
+    "species": "PageView",
+    "payload": {
+      "action": "add_to_cart",
+      "user_id": "user789",
+      "product_id": "prod_E",
+      "price": 15.99
+    }
+  },
+  {
+    "species": "PageView",
+    "payload": {
+      "action": "add_to_cart",
+      "user_id": "user789",
+      "product_id": "prod_F",
+      "price": 25.99
+    }
+  }
+]
+

@@ -1,0 +1,44 @@
+[
+  {
+    "species": "Event",
+    "payload": {
+      "type": "login_failed",
+      "ip": "1.2.3.4"
+    }
+  },
+  {
+    "species": "Event",
+    "payload": {
+      "type": "login_failed",
+      "ip": "1.2.3.4"
+    }
+  },
+  {
+    "species": "Event",
+    "payload": {
+      "type": "login_failed",
+      "ip": "1.2.3.4"
+    }
+  },
+  {
+    "species": "Event",
+    "payload": {
+      "type": "login_failed",
+      "ip": "5.6.7.8"
+    }
+  },
+  {
+    "species": "Event",
+    "payload": {
+      "type": "login_failed",
+      "ip": "5.6.7.8"
+    }
+  },
+  {
+    "species": "Event",
+    "payload": {
+      "type": "access_denied",
+      "ip": "9.10.11.12"
+    }
+  }
+]

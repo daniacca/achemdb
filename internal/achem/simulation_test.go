@@ -11,9 +11,9 @@ import (
 func loadSchemaFromExamples(t *testing.T, filename string) (SchemaConfig, *Schema) {
 	t.Helper()
 	
-	// Get the path to examples directory relative to this test file
-	// This file is in internal/achem/, so examples is at ../../examples/
-	examplesPath := filepath.Join("..", "..", "examples", filename)
+	// Get the path to examples/schema directory relative to this test file
+	// This file is in internal/achem/, so examples/schema is at ../../examples/schema/
+	examplesPath := filepath.Join("..", "..", "examples", "schema", filename)
 	
 	data, err := os.ReadFile(examplesPath)
 	if err != nil {
@@ -38,11 +38,11 @@ func loadSchemaFromExamples(t *testing.T, filename string) (SchemaConfig, *Schem
 }
 
 func TestSimulation_SecuritySchema(t *testing.T) {
-	_, schema := loadSchemaFromExamples(t, "schema_security.json")
+	_, schema := loadSchemaFromExamples(t, "security.json")
 	env := NewEnvironment(schema)
 
 	// Seed with a few login failure events with the same IP
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		m := NewMolecule("Event", map[string]any{
 			"type": "login_failed",
 			"ip":   "1.2.3.4",
@@ -91,11 +91,11 @@ func TestSimulation_SecuritySchema(t *testing.T) {
 }
 
 func TestSimulation_EcommerceSchema(t *testing.T) {
-	_, schema := loadSchemaFromExamples(t, "schema_ecommerce.json")
+	_, schema := loadSchemaFromExamples(t, "ecommerce.json")
 	env := NewEnvironment(schema)
 
 	// Seed with page views that lead to cart items
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		m := NewMolecule("PageView", map[string]any{
 			"action":    "add_to_cart",
 			"user_id":   "user123",
@@ -108,8 +108,7 @@ func TestSimulation_EcommerceSchema(t *testing.T) {
 	}
 
 	// Run simulation
-	ticks := 100
-	for i := 0; i < ticks; i++ {
+	for range 100 {
 		env.Step()
 	}
 
@@ -145,13 +144,13 @@ func TestSimulation_EcommerceSchema(t *testing.T) {
 }
 
 func TestSimulation_MonitoringSchema(t *testing.T) {
-	_, schema := loadSchemaFromExamples(t, "schema_monitoring.json")
+	_, schema := loadSchemaFromExamples(t, "monitoring.json")
 	env := NewEnvironment(schema)
 
 	// Seed with metrics for a few different metric names
 	metricNames := []string{"cpu_usage", "memory_usage", "disk_io"}
 	for _, name := range metricNames {
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			m := NewMolecule("Metric", map[string]any{
 				"name":  name,
 				"value": 75.0 + float64(i)*5.0,
@@ -163,8 +162,7 @@ func TestSimulation_MonitoringSchema(t *testing.T) {
 	}
 
 	// Run simulation
-	ticks := 100
-	for i := 0; i < ticks; i++ {
+	for range 100 {
 		env.Step()
 	}
 
@@ -198,7 +196,7 @@ func TestSimulation_MonitoringSchema(t *testing.T) {
 }
 
 func TestSimulation_IoTSchema(t *testing.T) {
-	_, schema := loadSchemaFromExamples(t, "schema_iot.json")
+	_, schema := loadSchemaFromExamples(t, "iot.json")
 	env := NewEnvironment(schema)
 
 	// Seed with threshold and sensor readings
@@ -213,7 +211,7 @@ func TestSimulation_IoTSchema(t *testing.T) {
 	env.Insert(threshold)
 
 	// Add some sensor readings that might exceed threshold
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		m := NewMolecule("SensorReading", map[string]any{
 			"sensor_id": "sensor1",
 			"device_id": "device1",
@@ -225,8 +223,7 @@ func TestSimulation_IoTSchema(t *testing.T) {
 	}
 
 	// Run simulation
-	ticks := 100
-	for i := 0; i < ticks; i++ {
+	for range 100 {
 		env.Step()
 	}
 
@@ -272,11 +269,11 @@ func TestSimulation_IoTSchema(t *testing.T) {
 }
 
 func TestSimulation_DefaultSchema(t *testing.T) {
-	_, schema := loadSchemaFromExamples(t, "schema.json")
+	_, schema := loadSchemaFromExamples(t, "default.json")
 	env := NewEnvironment(schema)
 
 	// Seed with some events
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		m := NewMolecule("Event", map[string]any{
 			"type": "test_event",
 			"data": i,
@@ -287,8 +284,7 @@ func TestSimulation_DefaultSchema(t *testing.T) {
 	}
 
 	// Run simulation
-	ticks := 100
-	for i := 0; i < ticks; i++ {
+	for range 100 {
 		env.Step()
 	}
 
