@@ -50,7 +50,7 @@ This helps us understand the use case and discuss the implementation before you 
 
 ## Commit message convention
 
-The project follow (conventional commit)[https://www.conventionalcommits.org/en/v1.0.0/] guideline for commit messages.
+The project follow [conventional commit](https://www.conventionalcommits.org/en/v1.0.0/) guideline for commit messages.
 
 ## Questions?
 
