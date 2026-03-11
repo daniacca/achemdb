@@ -24,18 +24,8 @@ func (e *ValidationError) Add(issue string) {
 	e.Issues = append(e.Issues, issue)
 }
 
-func (e *ValidationError) HasIssues() bool {
+func (e ValidationError) HasIssues() bool {
 	return len(e.Issues) > 0
-}
-
-// Valid operators for CountMoleculesConfig.Op
-var validOperators = map[string]bool{
-	"eq":  true,
-	"ne":  true,
-	"gt":  true,
-	"gte": true,
-	"lt":  true,
-	"lte": true,
 }
 
 // ValidateSchemaConfig performs comprehensive validation of a SchemaConfig
@@ -171,6 +161,16 @@ func validateIfCondition(cond *IfConditionConfig, prefix string, speciesMap map[
 	if cond.Field == "" && cond.Op == "" && cond.CountMolecules == nil {
 		err.Add(prefix + ": if condition must have either count_molecules or field+op")
 	}
+}
+
+// Valid operators for CountMoleculesConfig.Op
+var validOperators = map[string]bool{
+	"eq":  true,
+	"ne":  true,
+	"gt":  true,
+	"gte": true,
+	"lt":  true,
+	"lte": true,
 }
 
 // validateCountMolecules validates a CountMoleculesConfig

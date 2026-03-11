@@ -13,19 +13,19 @@ import (
 // It contains molecules, reactions, and manages the simulation state.
 // Environments are thread-safe and can run continuously or step-by-step.
 type Environment struct {
-	mu                sync.RWMutex
-	schema            *Schema
-	time              int64
-	mols              map[MoleculeID]Molecule
-	rand              *rand.Rand
-	stopCh            chan struct{}
-	isRunning         bool
-	envID             EnvironmentID
-	notifierMgr       *NotificationManager
-	snapshotDir       string
+	mu                  sync.RWMutex
+	schema              *Schema
+	time                int64
+	mols                map[MoleculeID]Molecule
+	rand                *rand.Rand
+	stopCh              chan struct{}
+	isRunning           bool
+	envID               EnvironmentID
+	notifierMgr         *NotificationManager
+	snapshotDir         string
 	snapshotEveryNTicks int
-	snapshotMu        sync.Mutex
-	logger            Logger
+	snapshotMu          sync.Mutex
+	logger              Logger
 }
 
 // NewEnvironment creates a new environment with the given schema.
@@ -43,15 +43,15 @@ func NewEnvironmentWithLogger(schema *Schema, logger Logger) *Environment {
 		logger = NewNoOpLogger()
 	}
 	return &Environment{
-		schema:            schema,
-		mols:              make(map[MoleculeID]Molecule),
-		rand:              rand.New(rand.NewSource(time.Now().UnixNano())),
-		time:              0,
-		stopCh:            make(chan struct{}),
-		isRunning:         false,
-		notifierMgr:       NewNotificationManagerWithLogger(logger),
+		schema:              schema,
+		mols:                make(map[MoleculeID]Molecule),
+		rand:                rand.New(rand.NewSource(time.Now().UnixNano())),
+		time:                0,
+		stopCh:              make(chan struct{}),
+		isRunning:           false,
+		notifierMgr:         NewNotificationManagerWithLogger(logger),
 		snapshotEveryNTicks: 1000, // default value
-		logger:            logger,
+		logger:              logger,
 	}
 }
 
@@ -184,8 +184,17 @@ func (e *Environment) UnregisterCallback(id string) {
 	e.notifierMgr.UnregisterCallback(id)
 }
 
-// a single step inside the environment, it will apply all reactions to all the molecules
-// collected in the snapshot. 
+// Execute a single "tick" inside the environment. It will apply all reactions to all the molecules
+// collected in the snapshot, recombining the molecules and changing the state of the environment.
+// PLEASE NOTE: this method will operate under 3 phases: snapshot, compute, and apply.
+// The snapshot phase is under lock, so it is thread safe, but keep in mind that the
+// consumed memory will be doubled. Other that double the molecules, we also create maps for
+// species and field value indexes. This is a trade-off between memory and performance.
+// The compute phase is where we calculate how to change the state: we apply all the reactions
+// and produce lists of molecules to be consumed, updated, or created.
+// Since we are working on a private copy of all the data, we don't need to lock the environment again.
+// The apply phase is where we reconcile data, and apply all those changes to the environment.
+// Since we are working on the actual environment, we need to lock it again.
 func (e *Environment) Step() {
 	// 1) SNAPSHOT PHASE (under lock)
 	e.mu.Lock()
