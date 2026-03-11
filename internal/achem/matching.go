@@ -18,6 +18,7 @@ func indexKeyFromValue(v any) string {
 //   - $m.created_at / $m.createdAt / $m.CreatedAt
 //   - $m.last_touched_at / $m.lastTouchedAt / $m.LastTouchedAt
 //   - $m.<payloadField>
+//
 // Any non-string value is returned as-is.
 func resolveValueRef(val any, origin Molecule) any {
 	s, ok := val.(string)
@@ -57,7 +58,7 @@ func matchWhere(where WhereConfig, candidate Molecule, origin Molecule) bool {
 	for field, cond := range where {
 		// Resolve the condition value (might be "$m.field")
 		condValue := resolveValueRef(cond.Eq, origin)
-		
+
 		candidateValue, ok := candidate.Payload[field]
 		if !ok || candidateValue != condValue {
 			return false
@@ -107,4 +108,3 @@ func filterBySpeciesAndWhere(env EnvView, species SpeciesName, where WhereConfig
 	}
 	return out
 }
-

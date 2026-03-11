@@ -426,4 +426,3 @@ func TestReactionBuilder_WithNotifications_EmptyNotifiers(t *testing.T) {
 		t.Errorf("Expected 0 notifiers (for callbacks), got %d", len(cfg.Notify.Notifiers))
 	}
 }
-

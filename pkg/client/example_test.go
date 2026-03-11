@@ -93,10 +93,9 @@ func ExampleNotificationBuilder_callbacks() {
 			// Enable notifications without notifiers - callbacks will be called
 			Notify(client.NewNotification().
 				Enabled(true),
-				// No Notifiers() call - empty notifiers list is valid for callbacks
+			// No Notifiers() call - empty notifiers list is valid for callbacks
 			),
 		)
 
 	_ = schema
 }
-

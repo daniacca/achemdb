@@ -80,4 +80,3 @@ func (wn *WebhookNotifier) Notify(ctx context.Context, event achem.NotificationE
 func (wn *WebhookNotifier) Close() error {
 	return nil
 }
-

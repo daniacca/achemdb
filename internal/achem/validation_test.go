@@ -270,4 +270,3 @@ func TestValidateSchemaConfig_InvalidCreateEffectSpecies(t *testing.T) {
 		t.Fatalf("expected error message about create effect species not existing, got: %v", err)
 	}
 }
-

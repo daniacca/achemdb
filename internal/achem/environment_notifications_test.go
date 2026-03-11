@@ -198,7 +198,7 @@ type mockNotifierForTest struct {
 	notifyFunc func(context.Context, NotificationEvent) error
 }
 
-func (m *mockNotifierForTest) ID() string { return m.id }
+func (m *mockNotifierForTest) ID() string   { return m.id }
 func (m *mockNotifierForTest) Type() string { return "mock" }
 func (m *mockNotifierForTest) Notify(ctx context.Context, event NotificationEvent) error {
 	if m.notifyFunc != nil {
@@ -494,4 +494,3 @@ func TestEnvironment_RegisterCallback_Multiple(t *testing.T) {
 		t.Error("Expected callback-2 to be called")
 	}
 }
-

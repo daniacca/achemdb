@@ -14,10 +14,9 @@ type NoOpLogger struct{}
 func (n *NoOpLogger) Debugf(format string, v ...any) {}
 func (n *NoOpLogger) Infof(format string, v ...any)  {}
 func (n *NoOpLogger) Warnf(format string, v ...any)  {}
-func (n *NoOpLogger) Errorf(format string, v ...any)  {}
+func (n *NoOpLogger) Errorf(format string, v ...any) {}
 
 // NewNoOpLogger creates a no-op logger
 func NewNoOpLogger() Logger {
 	return &NoOpLogger{}
 }
-

@@ -25,11 +25,11 @@ func (a *achemLoggerAdapter) Errorf(format string, v ...any) {
 
 // Server represents the HTTP server for AChemDB
 type Server struct {
-	manager           *achem.EnvironmentManager
-	globalNotifierMgr *achem.NotificationManager
-	snapshotDir       string
+	manager            *achem.EnvironmentManager
+	globalNotifierMgr  *achem.NotificationManager
+	snapshotDir        string
 	snapshotEveryTicks int
-	logger            *Logger
+	logger             *Logger
 }
 
 // NewServer creates a new server instance

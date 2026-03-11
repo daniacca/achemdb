@@ -4,6 +4,7 @@
 ![CI](https://github.com/daniacca/achemdb/actions/workflows/ci.yml/badge.svg)
 ![Github tag](https://img.shields.io/github/v/tag/daniacca/achemdb)
 ![Docker Pulls](https://img.shields.io/docker/pulls/kaelisra/achemdb)
+[![Go Report Card](https://goreportcard.com/badge/github.com/daniacca/achemdb)](https://goreportcard.com/report/github.com/daniacca/achemdb)
 
 <div align="center"><img src="./docs/img/achemdb_logo.png" width=250 height=250></div>
 

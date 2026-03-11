@@ -6,16 +6,16 @@ import (
 
 // mockReaction is a simple reaction implementation for testing
 type mockReaction struct {
-	id           string
-	name         string
-	inputPattern func(Molecule) bool
-	rate         float64
-	apply        func(Molecule, EnvView, ReactionContext) ReactionEffect
+	id            string
+	name          string
+	inputPattern  func(Molecule) bool
+	rate          float64
+	apply         func(Molecule, EnvView, ReactionContext) ReactionEffect
 	effectiveRate func(Molecule, EnvView) float64
 }
 
-func (m *mockReaction) ID() string   { return m.id }
-func (m *mockReaction) Name() string { return m.name }
+func (m *mockReaction) ID() string    { return m.id }
+func (m *mockReaction) Name() string  { return m.name }
 func (m *mockReaction) Rate() float64 { return m.rate }
 func (m *mockReaction) EffectiveRate(mol Molecule, env EnvView) float64 {
 	if m.effectiveRate != nil {
@@ -186,4 +186,3 @@ func TestSchema_Reactions(t *testing.T) {
 		t.Errorf("Expected 1 reaction, got %d", len(reactions))
 	}
 }
-

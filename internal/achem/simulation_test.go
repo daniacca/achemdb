@@ -10,11 +10,11 @@ import (
 // loadSchemaFromExamples loads a schema from the examples directory
 func loadSchemaFromExamples(t *testing.T, filename string) (SchemaConfig, *Schema) {
 	t.Helper()
-	
+
 	// Get the path to examples/schema directory relative to this test file
 	// This file is in internal/achem/, so examples/schema is at ../../examples/schema/
 	examplesPath := filepath.Join("..", "..", "examples", "schema", filename)
-	
+
 	data, err := os.ReadFile(examplesPath)
 	if err != nil {
 		t.Fatalf("Failed to read schema file %s: %v", examplesPath, err)
@@ -97,10 +97,10 @@ func TestSimulation_EcommerceSchema(t *testing.T) {
 	// Seed with page views that lead to cart items
 	for i := range 5 {
 		m := NewMolecule("PageView", map[string]any{
-			"action":    "add_to_cart",
-			"user_id":   "user123",
+			"action":     "add_to_cart",
+			"user_id":    "user123",
 			"product_id": "prod" + string(rune('A'+i)),
-			"price":     10.0 + float64(i),
+			"price":      10.0 + float64(i),
 		}, 0)
 		m.CreatedAt = 0
 		m.LastTouchedAt = 0
@@ -127,7 +127,7 @@ func TestSimulation_EcommerceSchema(t *testing.T) {
 
 	// Check that higher-level species can appear (CartItem, Purchase, etc.)
 	// Note: Due to decay, some may not appear, which is fine
-	hasHigherLevel := counts["CartItem"] > 0 || counts["Purchase"] > 0 || 
+	hasHigherLevel := counts["CartItem"] > 0 || counts["Purchase"] > 0 ||
 		counts["Recommendation"] > 0 || counts["AbandonedCart"] > 0
 	if !hasHigherLevel && totalCount > 0 {
 		t.Logf("Warning: No higher-level species appeared. Counts: %v", counts)
@@ -310,4 +310,3 @@ func TestSimulation_DefaultSchema(t *testing.T) {
 
 	t.Logf("Default schema simulation: total=%d, counts=%v", totalCount, counts)
 }
-

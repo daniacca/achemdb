@@ -151,7 +151,7 @@ func TestEnvironment_Step_IncrementsTime(t *testing.T) {
 
 func TestEnvironment_Step_WithReaction(t *testing.T) {
 	schema := NewSchema("test")
-	
+
 	// Create a reaction that always matches and always fires
 	consumed := false
 	r := &mockReaction{
@@ -203,7 +203,7 @@ func TestEnvironment_Step_WithReaction(t *testing.T) {
 
 func TestEnvironment_Step_UpdateMolecule(t *testing.T) {
 	schema := NewSchema("test")
-	
+
 	updated := false
 	r := &mockReaction{
 		id:   "update-reaction",
@@ -252,7 +252,7 @@ func TestEnvironment_Step_UpdateMolecule(t *testing.T) {
 
 func TestEnvironment_Step_ReactionRate(t *testing.T) {
 	schema := NewSchema("test")
-	
+
 	// Reaction with rate 0.0 should never fire
 	fired := false
 	r := &mockReaction{
@@ -283,11 +283,11 @@ func TestEnvironment_Step_ReactionRate(t *testing.T) {
 
 func TestEnvironment_Step_MultipleReactions(t *testing.T) {
 	schema := NewSchema("test")
-	
+
 	// Create two reactions that both match the same molecule
 	r1Fired := false
 	r2Fired := false
-	
+
 	r1 := &mockReaction{
 		id:   "r1",
 		rate: 1.0, // Always fire
@@ -301,7 +301,7 @@ func TestEnvironment_Step_MultipleReactions(t *testing.T) {
 			}
 		},
 	}
-	
+
 	r2 := &mockReaction{
 		id:   "r2",
 		rate: 1.0, // Always fire
@@ -332,7 +332,7 @@ func TestEnvironment_Step_MultipleReactions(t *testing.T) {
 
 func TestEnvironment_Step_NewMoleculeAutoID(t *testing.T) {
 	schema := NewSchema("test")
-	
+
 	r := &mockReaction{
 		id:   "create-new",
 		rate: 1.0,
@@ -633,11 +633,11 @@ func TestEnvironment_Run_ConcurrentAccess(t *testing.T) {
 
 func TestEnvironment_Run_StepIsCalled(t *testing.T) {
 	schema := NewSchema("test")
-	
+
 	// Create a reaction that tracks if it was called
 	reactionCalled := false
 	var mu sync.Mutex
-	
+
 	r := &mockReaction{
 		id:   "track-reaction",
 		rate: 1.0, // Always fire
@@ -1189,7 +1189,7 @@ func TestEnvironment_LoadSnapshot_UnknownSpecies(t *testing.T) {
 	snapshot := Snapshot{
 		EnvironmentID: "test-env",
 		Time:          75,
-		Molecules:      []Molecule{m1, m2},
+		Molecules:     []Molecule{m1, m2},
 	}
 
 	data, err := EncodeSnapshotJSON(snapshot)
@@ -1255,4 +1255,3 @@ func TestEnvironment_LoadSnapshot_NoSnapshotDir(t *testing.T) {
 		t.Errorf("Expected no error when snapshot dir is not set, got %v", err)
 	}
 }
-

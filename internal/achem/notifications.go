@@ -15,14 +15,14 @@ type NotificationEvent struct {
 	ReactionName  string        `json:"reaction_name"`
 	Timestamp     int64         `json:"timestamp"`
 	EnvTime       int64         `json:"env_time"`
-	
+
 	// Molecules involved in the reaction
 	InputMolecule     Molecule   `json:"input_molecule"`
 	Partners          []Molecule `json:"partners,omitempty"`
 	ConsumedMolecules []Molecule `json:"consumed_molecules,omitempty"`
 	CreatedMolecules  []Molecule `json:"created_molecules,omitempty"`
 	UpdatedMolecules  []Molecule `json:"updated_molecules,omitempty"`
-	
+
 	// Effect summary
 	Effect ReactionEffect `json:"effect"`
 }
@@ -31,14 +31,14 @@ type NotificationEvent struct {
 type Notifier interface {
 	// ID returns a unique identifier for this notifier
 	ID() string
-	
+
 	// Type returns the type of notifier (e.g., "webhook", "websocket", "rabbitmq")
 	Type() string
-	
+
 	// Notify sends a notification event. Returns an error if notification fails.
 	// The context can be used for cancellation and timeout.
 	Notify(ctx context.Context, event NotificationEvent) error
-	
+
 	// Close closes the notifier and releases any resources
 	Close() error
 }
@@ -104,19 +104,19 @@ func (nm *NotificationManager) RegisterNotifier(notifier Notifier) error {
 	if notifier == nil {
 		return fmt.Errorf("notifier cannot be nil")
 	}
-	
+
 	id := notifier.ID()
 	if id == "" {
 		return fmt.Errorf("notifier ID cannot be empty")
 	}
-	
+
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
-	
+
 	if _, exists := nm.notifiers[id]; exists {
 		return fmt.Errorf("notifier with ID %s already exists", id)
 	}
-	
+
 	nm.notifiers[id] = notifier
 	return nil
 }
@@ -147,19 +147,19 @@ func (nm *NotificationManager) UnregisterNotifier(id string) error {
 	nm.mu.Lock()
 	notifier, exists := nm.notifiers[id]
 	nm.mu.Unlock()
-	
+
 	if !exists {
 		return fmt.Errorf("notifier with ID %s not found", id)
 	}
-	
+
 	if err := notifier.Close(); err != nil {
 		return fmt.Errorf("error closing notifier %s: %w", id, err)
 	}
-	
+
 	nm.mu.Lock()
 	delete(nm.notifiers, id)
 	nm.mu.Unlock()
-	
+
 	return nil
 }
 
@@ -190,16 +190,16 @@ func (nm *NotificationManager) Enqueue(event NotificationEvent, notifierIDs []st
 	closed := nm.closed
 	hasCallbacks := len(nm.callbacks) > 0
 	nm.mu.RUnlock()
-	
+
 	// If there are no notifiers and no callbacks, skip enqueuing
 	if len(notifierIDs) == 0 && !hasCallbacks {
 		return
 	}
-	
+
 	if closed {
 		return
 	}
-	
+
 	// Best effort: if channel is full, drop or log and return
 	select {
 	case nm.jobs <- notificationJob{Event: event, NotifierIDs: notifierIDs}:
@@ -228,7 +228,7 @@ func (nm *NotificationManager) worker() {
 func (nm *NotificationManager) dispatchJob(job notificationJob) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	
+
 	// For each notifier ID, attempt delivery with retry/backoff
 	for _, id := range job.NotifierIDs {
 		nm.notifyWithRetry(ctx, id, job.Event)
@@ -247,31 +247,31 @@ func (nm *NotificationManager) notifyWithRetry(ctx context.Context, notifierID s
 	nm.mu.RLock()
 	notifier, ok := nm.notifiers[notifierID]
 	nm.mu.RUnlock()
-	
+
 	if !ok {
 		nm.logger.Errorf("notification failed: notifier=%s error=notifier not found", notifierID)
 		return
 	}
-	
+
 	// Basic retry/backoff policy
 	const maxRetries = 3
 	backoff := 100 * time.Millisecond
-	
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		err := notifier.Notify(ctx, event)
 		if err == nil {
 			return
 		}
-		
+
 		// Log the failure
 		nm.logger.Warnf("notification failed: notifier=%s attempt=%d error=%v", notifierID, attempt+1, err)
-		
+
 		if attempt == maxRetries {
 			// Max retries reached, give up
 			nm.logger.Errorf("notification failed after %d attempts: notifier=%s", maxRetries+1, notifierID)
 			return
 		}
-		
+
 		// Exponential backoff
 		select {
 		case <-ctx.Done():
@@ -289,27 +289,27 @@ func (nm *NotificationManager) Notify(ctx context.Context, event NotificationEve
 	if len(notifierIDs) == 0 {
 		return nil // No notifiers to notify
 	}
-	
+
 	var errors []error
 	for _, id := range notifierIDs {
 		nm.mu.RLock()
 		notifier, exists := nm.notifiers[id]
 		nm.mu.RUnlock()
-		
+
 		if !exists {
 			errors = append(errors, fmt.Errorf("notifier %s not found", id))
 			continue
 		}
-		
+
 		if err := notifier.Notify(ctx, event); err != nil {
 			errors = append(errors, fmt.Errorf("notifier %s failed: %w", id, err))
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("notification errors: %v", errors)
 	}
-	
+
 	return nil
 }
 
@@ -324,10 +324,10 @@ func (nm *NotificationManager) Close() error {
 	nm.closed = true
 	close(nm.jobs)
 	nm.mu.Unlock()
-	
+
 	// Wait for all workers to finish processing
 	nm.wg.Wait()
-	
+
 	// Close all registered notifiers
 	nm.mu.Lock()
 	var errors []error
@@ -338,11 +338,11 @@ func (nm *NotificationManager) Close() error {
 	}
 	nm.notifiers = make(map[string]Notifier)
 	nm.mu.Unlock()
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("errors closing notifiers: %v", errors)
 	}
-	
+
 	return nil
 }
 
@@ -358,7 +358,7 @@ func CreateNotificationEventWithConsumed(
 ) NotificationEvent {
 	// Collect created molecules
 	created := effect.NewMolecules
-	
+
 	// Collect updated molecules
 	updated := make([]Molecule, 0, len(effect.Changes))
 	for _, change := range effect.Changes {
@@ -366,7 +366,7 @@ func CreateNotificationEventWithConsumed(
 			updated = append(updated, *change.Updated)
 		}
 	}
-	
+
 	return NotificationEvent{
 		EnvironmentID:     envID,
 		ReactionID:        reaction.ID(),

@@ -471,7 +471,7 @@ func TestEnvironmentManager_CreateEnvironment_CallsLoadSnapshot(t *testing.T) {
 	}
 
 	env.SetSnapshotDir(tmpDir)
-	
+
 	// Now call LoadSnapshot manually (since snapshotDir wasn't set during CreateEnvironment)
 	if err := env.LoadSnapshot(); err != nil {
 		t.Fatalf("Failed to load snapshot: %v", err)
@@ -522,11 +522,10 @@ func TestEnvironmentManager_CreateEnvironment_SnapshotLoadFailure(t *testing.T) 
 	env := NewEnvironment(schema)
 	env.SetEnvironmentID(envID)
 	env.SetSnapshotDir(tmpDir)
-	
+
 	// Test LoadSnapshot directly - should fail due to envID mismatch
 	err = env.LoadSnapshot()
 	if err == nil {
 		t.Fatal("Expected error when loading snapshot with mismatched env ID")
 	}
 }
-

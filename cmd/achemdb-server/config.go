@@ -12,12 +12,12 @@ import (
 
 // ServerConfig holds the server configuration
 type ServerConfig struct {
-	Addr              string
-	DefaultEnvID      string
-	SchemaFile        string
-	SnapshotDir       string
+	Addr               string
+	DefaultEnvID       string
+	SchemaFile         string
+	SnapshotDir        string
 	SnapshotEveryTicks int
-	LogLevel          string
+	LogLevel           string
 }
 
 // configResolver defines how to resolve a single configuration value
@@ -70,7 +70,7 @@ func loadServerConfig() ServerConfig {
 			envVarName:  "ACHEMDB_SNAPSHOT_EVERY_TICKS",
 			defaultVal:  "1000",
 			description: "How often to write snapshots (in number of ticks); 0 disables periodic snapshots",
-			setter:      func(c *ServerConfig, v string) {
+			setter: func(c *ServerConfig, v string) {
 				// Parse int value, with error handling
 				if val, err := strconv.Atoi(v); err == nil {
 					c.SnapshotEveryTicks = val
@@ -172,4 +172,3 @@ func applyInitialSchemaToEnvironment(manager *achem.EnvironmentManager, globalNo
 
 	return nil
 }
-

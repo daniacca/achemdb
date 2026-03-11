@@ -66,4 +66,3 @@ func DecodeSnapshotJSON(data []byte) (Snapshot, error) {
 	}
 	return snapshot, nil
 }
-

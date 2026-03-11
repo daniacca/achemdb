@@ -49,12 +49,11 @@ type mockReaction struct {
 	id string
 }
 
-func (m *mockReaction) ID() string   { return m.id }
-func (m *mockReaction) Name() string { return "Mock Reaction" }
-func (m *mockReaction) Rate() float64 { return 1.0 }
+func (m *mockReaction) ID() string                                                  { return m.id }
+func (m *mockReaction) Name() string                                                { return "Mock Reaction" }
+func (m *mockReaction) Rate() float64                                               { return 1.0 }
 func (m *mockReaction) EffectiveRate(mol achem.Molecule, env achem.EnvView) float64 { return 1.0 }
-func (m *mockReaction) InputPattern(mol achem.Molecule) bool { return true }
+func (m *mockReaction) InputPattern(mol achem.Molecule) bool                        { return true }
 func (m *mockReaction) Apply(mol achem.Molecule, env achem.EnvView, ctx achem.ReactionContext) achem.ReactionEffect {
 	return achem.ReactionEffect{}
 }
-

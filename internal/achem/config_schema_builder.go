@@ -22,15 +22,15 @@ func (r *ConfigReaction) Rate() float64 {
 // EffectiveRate calculates the effective rate considering catalysts
 func (r *ConfigReaction) EffectiveRate(m Molecule, env EnvView) float64 {
 	baseRate := r.Rate()
-	
+
 	// If no catalysts, return base rate
 	if len(r.cfg.Catalysts) == 0 {
 		return baseRate
 	}
-	
+
 	effectiveRate := baseRate
 	maxRate := 1.0
-	
+
 	// Check each catalyst
 	for _, catalystCfg := range r.cfg.Catalysts {
 		catalysts := findCatalysts(catalystCfg, m, env)
@@ -41,14 +41,14 @@ func (r *ConfigReaction) EffectiveRate(m Molecule, env EnvView) float64 {
 				rateBoost = 0.1 // default boost
 			}
 			effectiveRate += rateBoost
-			
+
 			// Update max rate if this catalyst specifies one
 			if catalystCfg.MaxRate != nil && *catalystCfg.MaxRate < maxRate {
 				maxRate = *catalystCfg.MaxRate
 			}
 		}
 	}
-	
+
 	// Ensure rate is between 0 and 1 and maxRate is respected
 	if effectiveRate > maxRate {
 		effectiveRate = maxRate
@@ -57,11 +57,11 @@ func (r *ConfigReaction) EffectiveRate(m Molecule, env EnvView) float64 {
 	if effectiveRate < 0 {
 		effectiveRate = 0
 	}
-	
+
 	if effectiveRate > 1 {
 		effectiveRate = 1
 	}
-	
+
 	return effectiveRate
 }
 
@@ -140,7 +140,7 @@ func compareValues(left, right any, op string) bool {
 	// Try numeric comparison first
 	leftFloat, leftIsFloat := toFloat64(left)
 	rightFloat, rightIsFloat := toFloat64(right)
-	
+
 	if leftIsFloat && rightIsFloat {
 		switch op {
 		case "eq":
@@ -161,7 +161,7 @@ func compareValues(left, right any, op string) bool {
 	// Fall back to string comparison
 	leftStr := fmt.Sprintf("%v", left)
 	rightStr := fmt.Sprintf("%v", right)
-	
+
 	switch op {
 	case "eq":
 		return leftStr == rightStr
@@ -176,7 +176,7 @@ func compareValues(left, right any, op string) bool {
 	case "lte":
 		return leftStr <= rightStr
 	}
-	
+
 	return false
 }
 
@@ -225,8 +225,8 @@ func evaluateIfCondition(cond *IfConditionConfig, m Molecule, env EnvView) bool 
 		return false
 	}
 
-		// Resolve the comparison value (might be a reference like "$m.ip")
-		compareValue := resolveValueRef(cond.Value, m)
+	// Resolve the comparison value (might be a reference like "$m.ip")
+	compareValue := resolveValueRef(cond.Value, m)
 
 	return compareValues(fieldValue, compareValue, cond.Op)
 }
@@ -285,9 +285,9 @@ func findPartners(partnerCfg PartnerConfig, m Molecule, env EnvView) []Molecule 
 // Apply will apply the effects of the reaction to the molecule
 func (r *ConfigReaction) Apply(m Molecule, env EnvView, ctx ReactionContext) ReactionEffect {
 	effect := ReactionEffect{
-		ConsumedIDs:   []MoleculeID{},
-		Changes:       []MoleculeChange{},
-		NewMolecules:  []Molecule{},
+		ConsumedIDs:  []MoleculeID{},
+		Changes:      []MoleculeChange{},
+		NewMolecules: []Molecule{},
 	}
 
 	// Check for partners if required
@@ -298,7 +298,7 @@ func (r *ConfigReaction) Apply(m Molecule, env EnvView, ctx ReactionContext) Rea
 			if requiredCount <= 0 {
 				requiredCount = 1 // default to 1 if not specified
 			}
-			
+
 			foundPartners := findPartners(partnerCfg, m, env)
 			if len(foundPartners) < requiredCount {
 				// Not enough partners found, return empty effect
@@ -354,7 +354,7 @@ func (r *ConfigReaction) applyEffects(effects []EffectConfig, m Molecule, partne
 					break
 				}
 			}
-			
+
 			if change == nil {
 				// Create a copy of the molecule for the change
 				copy := m

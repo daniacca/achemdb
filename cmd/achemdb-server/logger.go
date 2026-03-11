@@ -125,4 +125,3 @@ func (l *Logger) Error(v ...any) {
 		log.Print("[ERROR] ", fmt.Sprint(v...))
 	}
 }
-

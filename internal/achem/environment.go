@@ -243,9 +243,9 @@ func (e *Environment) Step() {
 	}
 
 	view := envView{
-		molecules:            snapshot,
-		bySpecies:            bySpecies,
-		bySpeciesFieldValue:  bySpeciesFieldValue,
+		molecules:           snapshot,
+		bySpecies:           bySpecies,
+		bySpeciesFieldValue: bySpeciesFieldValue,
 	}
 
 	ctx := ReactionContext{
@@ -348,7 +348,7 @@ func (e *Environment) Step() {
 	}
 
 	// 4) SNAPSHOT PHASE (if needed, non-blocking)
-	if e.snapshotDir != "" && e.snapshotEveryNTicks > 0 && e.time % int64(e.snapshotEveryNTicks) == 0 {
+	if e.snapshotDir != "" && e.snapshotEveryNTicks > 0 && e.time%int64(e.snapshotEveryNTicks) == 0 {
 		go e.SaveSnapshot()
 	}
 }
@@ -394,7 +394,7 @@ func (e *Environment) Stop() {
 	if !e.isRunning {
 		return
 	}
-	
+
 	// Close the channel to signal stop
 	// The goroutine will detect this and set isRunning to false
 	close(e.stopCh)
@@ -411,7 +411,7 @@ func (e *Environment) sendNotificationWithContext(r Reaction, m Molecule, view E
 
 	// Check if there are callbacks registered - if so, we should enqueue even without notifiers
 	hasCallbacks := notifierMgr.hasCallbacks()
-	
+
 	// If there are no notifiers and no callbacks, skip enqueuing
 	if len(notifyCfg.Notifiers) == 0 && !hasCallbacks {
 		return

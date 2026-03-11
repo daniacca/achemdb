@@ -200,4 +200,3 @@ func validateCountMolecules(cfg *CountMoleculesConfig, prefix string, speciesMap
 		}
 	}
 }
-

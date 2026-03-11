@@ -38,9 +38,9 @@ type FieldCondition struct {
 
 // CountMoleculesConfig represents a count aggregation operation
 type CountMoleculesConfig struct {
-	Species string      `json:"species"` // species to count
-	Where   WhereConfig `json:"where,omitempty"`
-	Op      map[string]any `json:"op"`   // operator and value, e.g., {"gte": 3}
+	Species string         `json:"species"` // species to count
+	Where   WhereConfig    `json:"where,omitempty"`
+	Op      map[string]any `json:"op"` // operator and value, e.g., {"gte": 3}
 }
 
 // IfConditionConfig represents a conditional check
@@ -49,7 +49,7 @@ type IfConditionConfig struct {
 	Field string `json:"field,omitempty"`
 	Op    string `json:"op,omitempty"`
 	Value any    `json:"value,omitempty"`
-	
+
 	// Or a count_molecules aggregation
 	CountMolecules *CountMoleculesConfig `json:"count_molecules,omitempty"`
 }
@@ -58,15 +58,15 @@ type IfConditionConfig struct {
 type PartnerConfig struct {
 	Species string      `json:"species"` // species of the partner
 	Where   WhereConfig `json:"where,omitempty"`
-	Count   int         `json:"count"`   // number of partners required (default: 1)
+	Count   int         `json:"count"` // number of partners required (default: 1)
 }
 
 // CatalystConfig represents a catalyst molecule that increases reaction rate
 type CatalystConfig struct {
-	Species string      `json:"species"`              // species of the catalyst
-	Where   WhereConfig `json:"where,omitempty"`      // conditions for catalyst matching
-	RateBoost float64   `json:"rate_boost,omitempty"` // amount to add to rate (default: 0.1)
-	MaxRate  *float64   `json:"max_rate,omitempty"`   // maximum effective rate (default: 1.0)
+	Species   string      `json:"species"`              // species of the catalyst
+	Where     WhereConfig `json:"where,omitempty"`      // conditions for catalyst matching
+	RateBoost float64     `json:"rate_boost,omitempty"` // amount to add to rate (default: 0.1)
+	MaxRate   *float64    `json:"max_rate,omitempty"`   // maximum effective rate (default: 1.0)
 }
 
 type InputConfig struct {
@@ -87,10 +87,10 @@ type UpdateEffectConfig struct {
 }
 
 type EffectConfig struct {
-	Consume bool                 `json:"consume,omitempty"`
-	Create  *CreateEffectConfig  `json:"create,omitempty"`
-	Update  *UpdateEffectConfig  `json:"update,omitempty"`
-	
+	Consume bool                `json:"consume,omitempty"`
+	Create  *CreateEffectConfig `json:"create,omitempty"`
+	Update  *UpdateEffectConfig `json:"update,omitempty"`
+
 	// Conditional effects
 	If   *IfConditionConfig `json:"if,omitempty"`   // condition to check
 	Then []EffectConfig     `json:"then,omitempty"` // effects if condition is true
@@ -98,12 +98,12 @@ type EffectConfig struct {
 }
 
 type ReactionConfig struct {
-	ID        string           `json:"id"`
-	Name      string           `json:"name"`
-	Input     InputConfig      `json:"input"`
-	Rate      float64          `json:"rate"`
-	Catalysts []CatalystConfig `json:"catalysts,omitempty"` // catalysts that increase reaction rate
-	Effects   []EffectConfig   `json:"effects"`
+	ID        string              `json:"id"`
+	Name      string              `json:"name"`
+	Input     InputConfig         `json:"input"`
+	Rate      float64             `json:"rate"`
+	Catalysts []CatalystConfig    `json:"catalysts,omitempty"` // catalysts that increase reaction rate
+	Effects   []EffectConfig      `json:"effects"`
 	Notify    *NotificationConfig `json:"notify,omitempty"` // notification configuration
 }
 

@@ -116,13 +116,13 @@ func printSummary(schemaName string, ticks int, env *achem.Environment) {
 
 	fmt.Printf("Simulation finished (schema=%s, ticks=%d)\n", schemaName, ticks)
 	fmt.Println("Species counts:")
-	
+
 	// Print in a consistent order (sorted by species name)
 	speciesList := make([]achem.SpeciesName, 0, len(counts))
 	for species := range counts {
 		speciesList = append(speciesList, species)
 	}
-	
+
 	// Simple sort by string value
 	for i := 0; i < len(speciesList); i++ {
 		for j := i + 1; j < len(speciesList); j++ {
@@ -136,4 +136,3 @@ func printSummary(schemaName string, ticks int, env *achem.Environment) {
 		fmt.Printf("  %s: %d\n", species, counts[species])
 	}
 }
-

@@ -18,10 +18,10 @@ type MoleculeChange struct {
 // It can consume molecules, update existing ones, create new ones, and
 // perform additional operations.
 type ReactionEffect struct {
-	ConsumedIDs    []MoleculeID 		// molecules to remove
-	Changes        []MoleculeChange		// molecules to update
-	NewMolecules   []Molecule   		// new molecules to insert
-	AdditionalOps  []Operation  		// extendable in the future (e.g. log, metrics)
+	ConsumedIDs   []MoleculeID     // molecules to remove
+	Changes       []MoleculeChange // molecules to update
+	NewMolecules  []Molecule       // new molecules to insert
+	AdditionalOps []Operation      // extendable in the future (e.g. log, metrics)
 }
 
 // Operation is a placeholder for future extensible operations
@@ -56,7 +56,7 @@ type Reaction interface {
 
 	// EffectiveRate: calculates the effective rate considering catalysts.
 	// Returns the base rate modified by any matching catalysts in the environment.
-	// NOTE: this method must NOT HAVE ANY SIDE EFFECTS. It should only return the 
+	// NOTE: this method must NOT HAVE ANY SIDE EFFECTS. It should only return the
 	// effective rate, clamped between 0 and 1.
 	EffectiveRate(m Molecule, env EnvView) float64
 

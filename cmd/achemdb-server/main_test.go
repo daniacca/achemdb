@@ -21,7 +21,7 @@ func TestServer_HandleSaveSnapshot(t *testing.T) {
 	// Create environment with schema
 	schema := achem.NewSchema("test")
 	schema = schema.WithSpecies(achem.Species{Name: "TestSpecies"})
-	
+
 	envID := achem.EnvironmentID("test-env")
 	if err := srv.manager.CreateEnvironment(envID, schema); err != nil {
 		t.Fatalf("Failed to create environment: %v", err)
@@ -110,7 +110,7 @@ func TestServer_HandleGetSnapshot(t *testing.T) {
 	// Create environment with schema
 	schema := achem.NewSchema("test")
 	schema = schema.WithSpecies(achem.Species{Name: "TestSpecies"})
-	
+
 	envID := achem.EnvironmentID("test-env")
 	if err := srv.manager.CreateEnvironment(envID, schema); err != nil {
 		t.Fatalf("Failed to create environment: %v", err)
@@ -379,7 +379,7 @@ func TestLoadServerConfig_FlagsOverrideEnvVars(t *testing.T) {
 func TestLoadInitialSchemaFromFile_ValidSchema(t *testing.T) {
 	// Create a temporary JSON file with a valid schema
 	tmpFile := filepath.Join(t.TempDir(), "schema.json")
-	
+
 	validSchema := achem.SchemaConfig{
 		Name: "test-schema",
 		Species: []achem.SpeciesConfig{
@@ -392,7 +392,7 @@ func TestLoadInitialSchemaFromFile_ValidSchema(t *testing.T) {
 				Input: achem.InputConfig{
 					Species: "TestSpecies",
 				},
-				Rate: 1.0,
+				Rate:    1.0,
 				Effects: []achem.EffectConfig{},
 			},
 		},
@@ -446,7 +446,7 @@ func TestLoadInitialSchemaFromFile_InvalidJSON(t *testing.T) {
 
 func TestLoadInitialSchemaFromFile_InvalidSchema(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "invalid-schema.json")
-	
+
 	// Create a schema with invalid configuration (missing required fields)
 	invalidSchema := map[string]interface{}{
 		"name": "test",
@@ -695,4 +695,3 @@ func TestLogger_Levels(t *testing.T) {
 
 	_ = debugOutput // Suppress unused variable warning
 }
-

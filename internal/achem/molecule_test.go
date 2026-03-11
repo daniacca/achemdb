@@ -105,4 +105,3 @@ func TestNewMolecule_UniqueIDs(t *testing.T) {
 		ids[m.ID] = true
 	}
 }
-

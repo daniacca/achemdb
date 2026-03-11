@@ -10,9 +10,9 @@ type EnvironmentID string
 
 // EnvironmentManager manages multiple environments, each isolated from others
 type EnvironmentManager struct {
-	mu          sync.RWMutex
+	mu           sync.RWMutex
 	environments map[EnvironmentID]*Environment
-	logger      Logger
+	logger       Logger
 }
 
 // NewEnvironmentManager creates a new environment manager.
@@ -29,7 +29,7 @@ func NewEnvironmentManagerWithLogger(logger Logger) *EnvironmentManager {
 	}
 	return &EnvironmentManager{
 		environments: make(map[EnvironmentID]*Environment),
-		logger:      logger,
+		logger:       logger,
 	}
 }
 
@@ -56,14 +56,14 @@ func (em *EnvironmentManager) CreateEnvironment(id EnvironmentID, schema *Schema
 
 	env := NewEnvironmentWithLogger(schema, em.logger)
 	env.SetEnvironmentID(id)
-	
+
 	// Attempt to load snapshot (no-op if snapshot doesn't exist)
 	if err := env.LoadSnapshot(); err != nil {
 		// If snapshot loading fails, we still create the environment but log the error
 		// This allows environments to be created even if snapshot is corrupted
 		return fmt.Errorf("failed to load snapshot for environment %s: %w", id, err)
 	}
-	
+
 	em.environments[id] = env
 	return nil
 }
@@ -126,4 +126,3 @@ func (em *EnvironmentManager) UpdateEnvironmentSchema(id EnvironmentID, schema *
 
 	return nil
 }
-

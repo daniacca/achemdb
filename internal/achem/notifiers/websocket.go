@@ -194,4 +194,3 @@ func (wsn *WebSocketNotifier) Close() error {
 func (wsn *WebSocketNotifier) GetUpgrader() websocket.Upgrader {
 	return wsn.upgrader
 }
-

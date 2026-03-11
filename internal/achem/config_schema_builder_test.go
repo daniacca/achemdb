@@ -901,10 +901,10 @@ func TestConfigReaction_TimestampFieldInCreatePayload(t *testing.T) {
 				Create: &CreateEffectConfig{
 					Species: "Output",
 					Payload: map[string]any{
-						"timestamp":      "$m.created_at",
-						"last_touched":   "$m.last_touched_at",
-						"createdAt":      "$m.createdAt",
-						"lastTouchedAt":   "$m.lastTouchedAt",
+						"timestamp":     "$m.created_at",
+						"last_touched":  "$m.last_touched_at",
+						"createdAt":     "$m.createdAt",
+						"lastTouchedAt": "$m.lastTouchedAt",
 					},
 				},
 			},
@@ -1024,4 +1024,3 @@ func TestConfigReaction_TimestampFieldInCondition(t *testing.T) {
 		t.Error("Expected no Output molecule when condition is not met")
 	}
 }
-

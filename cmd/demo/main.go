@@ -10,7 +10,6 @@ import (
 	"github.com/daniacca/achemdb/internal/achem"
 )
 
-
 func main() {
 	fmt.Println("=== Achem Demo: Security Alerts System ===")
 	fmt.Println()
@@ -27,7 +26,7 @@ func main() {
 }
 
 func randRange(min, max int) int {
-    return rand.IntN(max-min) + min
+	return rand.IntN(max-min) + min
 }
 
 func runSecurityAlertsDemo() {
@@ -111,7 +110,7 @@ func ExampleCallbackDemo() {
 				},
 				// Enable notifications - then callbacks will be called
 				Notify: &achem.NotificationConfig{
-					Enabled:   true,
+					Enabled: true,
 				},
 			},
 		},
@@ -154,7 +153,7 @@ func ExampleCallbackDemo() {
 	}
 
 	fmt.Println("Running environment steps...")
-	
+
 	// Run the environment with a 100ms interval for each step to occur
 	env.Run(100 * time.Millisecond)
 

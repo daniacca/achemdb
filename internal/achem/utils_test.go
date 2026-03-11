@@ -26,4 +26,3 @@ func TestNewRandomID(t *testing.T) {
 		ids[id] = true
 	}
 }
-
